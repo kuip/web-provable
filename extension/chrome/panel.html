@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Web Provable</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <img src="icons/logo.png" alt="" width="36" height="36">
+      <div>
+        <p class="eyebrow">Web Provable</p>
+        <h1>Prove Inclusion</h1>
+      </div>
+    </header>
+
+    <main>
+      <p class="lede">Count exact, non-overlapping occurrences with the packaged, integrity-checked WasmX module.</p>
+
+      <section class="integrity-card" aria-labelledby="integrity-heading">
+        <div>
+          <h2 id="integrity-heading">Code integrity</h2>
+          <p id="module-status" class="status" aria-live="polite">Loading packaged module…</p>
+        </div>
+        <details>
+          <summary>Module digest</summary>
+          <code id="module-digest">Pending</code>
+        </details>
+      </section>
+
+      <form id="prove-form">
+        <label for="text-a">Text A</label>
+        <textarea id="text-a" rows="7" required placeholder="Text that was notarized by Kayros"></textarea>
+
+        <label for="proof-a">Kayros proof of A</label>
+        <textarea id="proof-a" rows="4" placeholder="Proof envelope integration follows the local computation slice"></textarea>
+        <p id="proof-status" class="field-status" aria-live="polite">Not verified</p>
+
+        <label for="text-b">Text B</label>
+        <input id="text-b" type="text" required placeholder="Text to find">
+
+        <label for="threshold">N</label>
+        <input id="threshold" type="number" min="0" step="1" value="0" required>
+
+        <button id="run-button" type="submit">Compute preview</button>
+      </form>
+
+      <p id="error-message" class="error" role="alert" hidden></p>
+
+      <section class="results" aria-labelledby="results-heading">
+        <h2 id="results-heading">Result</h2>
+        <div class="result-grid">
+          <div>
+            <span>Count C</span>
+            <output id="count-output" for="text-a text-b">—</output>
+          </div>
+          <div>
+            <span>N &lt; C</span>
+            <output id="result-output" for="threshold count-output">—</output>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>Core 0.1.0 · WasmX ABI 1</footer>
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>
+

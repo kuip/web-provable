@@ -1,0 +1,29 @@
+{
+  "name": "web-provable",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/core",
+    "apps/prove-inclusion",
+    "extension/chrome"
+  ],
+  "scripts": {
+    "build:wasm": "cargo build --workspace --target wasm32-unknown-unknown --release",
+    "build:chrome": "npm run build:wasm && node tools/build-chrome.mjs",
+    "build": "npm run build:chrome",
+    "verify:chrome": "node tools/verify-chrome.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:js": "vitest run",
+    "test:rust": "cargo test --workspace",
+    "test": "npm run build:wasm && npm run test:js && npm run test:rust",
+    "check": "npm run typecheck && npm test && npm run build && npm run verify:chrome"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.2.7",
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  }
+}

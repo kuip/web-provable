@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "prove-inclusion",
+  "kind": "app",
+  "version": "0.1.0",
+  "coreVersion": "^0.1.0",
+  "title": "Prove Inclusion",
+  "description": "Verify a Kayros-notarized text and prove whether another text occurs more than N times.",
+  "abi": "web-provable:app/1",
+  "module": {
+    "path": "app.wasm"
+  },
+  "ui": {
+    "path": "ui.md"
+  },
+  "fields": [
+    { "id": "a", "label": "Text A", "type": "text", "role": "input", "required": true },
+    { "id": "proofA", "label": "Kayros proof of A", "type": "proof", "role": "input", "required": true },
+    { "id": "b", "label": "Text B", "type": "text", "role": "input", "required": true },
+    { "id": "n", "label": "N", "type": "integer", "role": "input", "required": false, "default": 0 },
+    { "id": "count", "label": "Count C", "type": "integer", "role": "output", "readOnly": true },
+    { "id": "result", "label": "N < C", "type": "boolean", "role": "output", "readOnly": true }
+  ],
+  "capabilities": {
+    "kayros": true,
+    "drive": true,
+    "networkOrigins": ["https://kayros.provable.dev"]
+  },
+  "resourceLimits": {
+    "maxInputBytes": 1048576,
+    "maxOutputBytes": 65536,
+    "timeoutMs": 5000,
+    "maxMemoryPages": 64
+  }
+}
+

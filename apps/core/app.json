@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "core",
+  "kind": "core",
+  "version": "0.1.0",
+  "title": "Web Provable Core",
+  "description": "Shared contracts, integrity, Kayros, runtime, and WasmX libraries for every Web Provable app.",
+  "provides": {
+    "typescript": "@web-provable/core",
+    "wasmx": "web-provable-wasmx-core",
+    "wasmxAbi": "web-provable:app/1"
+  }
+}
+

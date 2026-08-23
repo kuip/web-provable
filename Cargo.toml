@@ -1,0 +1,14 @@
+[workspace]
+members = [
+  "apps/core/wasmx",
+  "apps/prove-inclusion/wasmx",
+]
+resolver = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+

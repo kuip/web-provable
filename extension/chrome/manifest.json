@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Web Provable",
+  "version": "0.1.0",
+  "description": "Run integrity-checked proof applications with Kayros.",
+  "minimum_chrome_version": "114",
+  "permissions": ["sidePanel", "storage"],
+  "action": {
+    "default_title": "Open Web Provable",
+    "default_icon": {
+      "16": "icons/logo.png",
+      "32": "icons/logo.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "icons": {
+    "16": "icons/logo.png",
+    "32": "icons/logo.png",
+    "48": "icons/logo.png",
+    "128": "icons/logo.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'"
+  }
+}
+
