@@ -17,12 +17,11 @@ import {
 
 interface RuntimeConfig {
   schemaVersion: 1;
-  profile: "development" | "store";
+  profile: "web";
   kayros: {
     apiBaseUrl: string;
     dashboardUrl: string;
-    apiKey: string;
-    dataType: string;
+    dataType: "provable_sdk";
     table: "s32_hashes";
   };
 }
@@ -30,9 +29,7 @@ interface RuntimeConfig {
 interface LoadedApp {
   config: RuntimeConfig;
   kayrosApiKey: string;
-  kayrosApiKeySource: "config" | "stored" | "unset";
   manifest: AppReleaseManifest;
-  markdown: string;
   runner: WasmXModule<ProveInclusionInput, ProveInclusionOutput>;
   sha3: WasmXSha3Module;
 }
@@ -60,6 +57,7 @@ const moduleDigest = requiredElement<HTMLElement>("module-digest");
 const uiDigest = requiredElement<HTMLElement>("ui-digest");
 const coreModuleDigest = requiredElement<HTMLElement>("core-module-digest");
 const errorMessage = requiredElement<HTMLElement>("error-message");
+const urlImportStatus = requiredElement<HTMLElement>("url-import-status");
 const latestKayrosHash = requiredElement<HTMLElement>("latest-kayros-hash");
 const latestKayrosMetadata = requiredElement<HTMLElement>("latest-kayros-metadata");
 const latestKayrosError = requiredElement<HTMLElement>("latest-kayros-error");
@@ -71,7 +69,8 @@ const kayrosApiKeyStatus = requiredElement<HTMLElement>("kayros-api-key-status")
 const saveKayrosApiKeyButton = requiredElement<HTMLButtonElement>("save-kayros-api-key");
 const clearKayrosApiKeyButton = requiredElement<HTMLButtonElement>("clear-kayros-api-key");
 
-const KAYROS_API_KEY_STORAGE_KEY = "provable.kayrosApiKey";
+const KAYROS_API_KEY_STORAGE_KEY = "provable.web.kayrosApiKey";
+const MAX_URL_FRAGMENT_LENGTH = 1_500_000;
 let loadedApp: LoadedApp | undefined;
 let latestKayrosLoaded = false;
 
@@ -83,100 +82,58 @@ kayrosSettingsForm.addEventListener("submit", (event) => {
   event.preventDefault();
   void saveKayrosApiKey();
 });
-clearKayrosApiKeyButton.addEventListener("click", () => {
-  void clearKayrosApiKey();
-});
+clearKayrosApiKeyButton.addEventListener("click", clearKayrosApiKey);
 kayrosApiKeyInput.addEventListener("input", () => {
   kayrosApiKeyStatus.textContent = "Unsaved API key change";
   delete kayrosApiKeyStatus.dataset.status;
 });
+
 showSelectedView();
-void initializeProveInclusion().catch(showLoadError);
+void initialize().catch(showLoadError);
 
-async function initializeProveInclusion(): Promise<void> {
-  const loaded = await loadPackagedApp();
-  loadedApp = loaded;
-  kayrosDashboardLink.href = loaded.config.kayros.dashboardUrl;
-  configureKayrosSettings(loaded);
-  const controls = renderAppTemplate(loaded.markdown, loaded.manifest);
-
-  controls.form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    void runPreview(loaded, controls);
-  });
-  for (const field of [
-    controls.textA,
-    controls.textB,
-    controls.threshold,
-  ]) {
-    field.addEventListener("input", () => resetResult(controls));
-  }
-
-  appContent.ariaBusy = "false";
-  if (viewSelector.value === "core") {
-    void refreshLatestKayros();
-  }
-}
-
-async function loadPackagedApp(): Promise<LoadedApp> {
+async function initialize(): Promise<void> {
   moduleStatus.textContent = "Verifying packaged UI, app module, and core module…";
   const [verified, configResponse] = await Promise.all([
     loadVerifiedBrowserApp<ProveInclusionInput, ProveInclusionOutput>({
-      appManifestUrl: "apps/prove-inclusion/app.json",
-      coreManifestUrl: "apps/core/app.json",
+      appManifestUrl: "./apps/prove-inclusion/app.json",
+      coreManifestUrl: "./apps/core/app.json",
     }),
-    fetch("config.json"),
+    fetch("./config.json"),
   ]);
   assertResponse(configResponse, "runtime config");
-
   const configValue: unknown = await configResponse.json();
   assertRuntimeConfig(configValue);
-  const config: RuntimeConfig = configValue;
-  const kayrosSettings = await resolveKayrosApiKey(config.kayros.apiKey);
+
+  const loaded: LoadedApp = {
+    config: configValue,
+    kayrosApiKey: readStoredKayrosApiKey(),
+    manifest: verified.manifest,
+    runner: verified.runner,
+    sha3: verified.sha3,
+  };
+  loadedApp = loaded;
+  kayrosDashboardLink.href = loaded.config.kayros.dashboardUrl;
+  configureKayrosSettings(loaded);
 
   moduleDigest.textContent = verified.moduleDigest;
   uiDigest.textContent = verified.uiDigest;
   coreModuleDigest.textContent = verified.coreDigest;
   moduleStatus.textContent = "Packaged UI and modules verified";
   moduleStatus.dataset.status = "verified";
-  return {
-    config,
-    kayrosApiKey: kayrosSettings.apiKey,
-    kayrosApiKeySource: kayrosSettings.source,
-    manifest: verified.manifest,
-    markdown: verified.markdown,
-    runner: verified.runner,
-    sha3: verified.sha3,
-  };
-}
 
-async function refreshLatestKayros(force = false): Promise<void> {
-  if (!loadedApp || (latestKayrosLoaded && !force)) {
-    return;
+  const controls = renderAppTemplate(verified.markdown, verified.manifest);
+  controls.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void runPreview(loaded, controls);
+  });
+  for (const field of [controls.textA, controls.textB, controls.threshold]) {
+    field.addEventListener("input", () => resetResult(controls));
   }
-  refreshKayrosButton.disabled = true;
-  latestKayrosHash.textContent = "Loading…";
-  latestKayrosError.hidden = true;
-  latestKayrosError.textContent = "";
-  try {
-    const record = await getLatestKayrosHash(
-      kayrosConnection(loadedApp),
-      loadedApp.config.kayros.dataType,
-    );
-    latestKayrosHash.textContent = record.hashItem;
-    latestKayrosMetadata.textContent = [
-      loadedApp.config.kayros.table,
-      record.dataType,
-      `block / position ${record.block}`,
-      record.timestamp,
-    ].join(" · ");
-    latestKayrosLoaded = true;
-  } catch (error) {
-    latestKayrosHash.textContent = "Unavailable";
-    latestKayrosError.textContent = formatError(error);
-    latestKayrosError.hidden = false;
-  } finally {
-    refreshKayrosButton.disabled = false;
+  applyUrlPrefill(controls);
+
+  appContent.ariaBusy = "false";
+  if (viewSelector.value === "core") {
+    void refreshLatestKayros();
   }
 }
 
@@ -270,6 +227,157 @@ function readInput(controls: ProveControls): ProveInclusionInput {
   return { a: controls.textA.value, b: controls.textB.value, n };
 }
 
+function applyUrlPrefill(controls: ProveControls): void {
+  const fragment = window.location.hash.slice(1);
+  if (fragment.length === 0) {
+    return;
+  }
+
+  try {
+    if (fragment.length > MAX_URL_FRAGMENT_LENGTH) {
+      throw new Error("URL input exceeds the import limit");
+    }
+    const parameters = new URLSearchParams(fragment);
+    if (parameters.get("v") !== "1") {
+      throw new Error("Unsupported Provable URL version");
+    }
+    if (parameters.get("app") !== "prove-inclusion") {
+      throw new Error("Unsupported Provable URL application");
+    }
+
+    const a = parameters.get("a");
+    const b = parameters.get("b");
+    const n = parameters.get("n");
+    if (a === null && b === null && n === null) {
+      throw new Error("Provable URL contains no input values");
+    }
+    if (a !== null) {
+      controls.textA.value = a;
+    }
+    if (b !== null) {
+      controls.textB.value = b;
+    }
+    if (n !== null && n.length > 0) {
+      const threshold = Number(n);
+      if (!Number.isSafeInteger(threshold) || threshold < 0) {
+        throw new Error("URL parameter N must be a non-negative integer");
+      }
+      controls.threshold.value = String(threshold);
+    }
+
+    viewSelector.value = "prove-inclusion";
+    showSelectedView();
+    urlImportStatus.textContent = "Inputs loaded from the URL and removed from the address bar. Review them before running.";
+    urlImportStatus.hidden = false;
+  } catch (error) {
+    urlImportStatus.textContent = formatError(error);
+    urlImportStatus.dataset.status = "invalid";
+    urlImportStatus.hidden = false;
+  } finally {
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }
+}
+
+async function refreshLatestKayros(force = false): Promise<void> {
+  if (!loadedApp || (latestKayrosLoaded && !force)) {
+    return;
+  }
+  refreshKayrosButton.disabled = true;
+  latestKayrosHash.textContent = "Loading…";
+  latestKayrosError.hidden = true;
+  latestKayrosError.textContent = "";
+  try {
+    const record = await getLatestKayrosHash(
+      kayrosConnection(loadedApp),
+      loadedApp.config.kayros.dataType,
+    );
+    latestKayrosHash.textContent = record.hashItem;
+    latestKayrosMetadata.textContent = [
+      loadedApp.config.kayros.table,
+      record.dataType,
+      `block / position ${record.block}`,
+      record.timestamp,
+    ].join(" · ");
+    latestKayrosLoaded = true;
+  } catch (error) {
+    latestKayrosHash.textContent = "Unavailable";
+    latestKayrosError.textContent = formatError(error);
+    latestKayrosError.hidden = false;
+  } finally {
+    refreshKayrosButton.disabled = false;
+  }
+}
+
+function configureKayrosSettings(loaded: LoadedApp): void {
+  kayrosApiKeyInput.disabled = false;
+  saveKayrosApiKeyButton.disabled = false;
+  clearKayrosApiKeyButton.disabled = false;
+  kayrosApiKeyInput.value = loaded.kayrosApiKey;
+  if (loaded.kayrosApiKey.length === 0) {
+    kayrosApiKeyStatus.textContent = "No API key configured";
+    delete kayrosApiKeyStatus.dataset.status;
+    return;
+  }
+  kayrosApiKeyStatus.textContent = "API key saved on this device";
+  kayrosApiKeyStatus.dataset.status = "verified";
+}
+
+async function saveKayrosApiKey(): Promise<void> {
+  if (!loadedApp) {
+    return;
+  }
+  try {
+    const apiKey = normalizeKayrosApiKey(kayrosApiKeyInput.value);
+    localStorage.setItem(KAYROS_API_KEY_STORAGE_KEY, apiKey);
+    loadedApp.kayrosApiKey = apiKey;
+    latestKayrosLoaded = false;
+    kayrosApiKeyStatus.textContent = "API key saved on this device";
+    kayrosApiKeyStatus.dataset.status = "verified";
+    if (viewSelector.value === "core") {
+      await refreshLatestKayros(true);
+    }
+  } catch (error) {
+    kayrosApiKeyStatus.textContent = formatError(error);
+    kayrosApiKeyStatus.dataset.status = "invalid";
+  }
+}
+
+function clearKayrosApiKey(): void {
+  if (!loadedApp) {
+    return;
+  }
+  try {
+    localStorage.removeItem(KAYROS_API_KEY_STORAGE_KEY);
+    loadedApp.kayrosApiKey = "";
+    kayrosApiKeyInput.value = "";
+    latestKayrosLoaded = false;
+    latestKayrosHash.textContent = "API key required";
+    latestKayrosMetadata.textContent = `${loadedApp.config.kayros.table} · ${loadedApp.config.kayros.dataType}`;
+    latestKayrosError.hidden = true;
+    latestKayrosError.textContent = "";
+    kayrosApiKeyStatus.textContent = "API key cleared; Kayros lookups are disabled";
+    delete kayrosApiKeyStatus.dataset.status;
+  } catch (error) {
+    kayrosApiKeyStatus.textContent = formatError(error);
+    kayrosApiKeyStatus.dataset.status = "invalid";
+  }
+}
+
+function readStoredKayrosApiKey(): string {
+  try {
+    return localStorage.getItem(KAYROS_API_KEY_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function kayrosConnection(loaded: LoadedApp): KayrosConnectionOptions {
+  return {
+    apiKey: loaded.kayrosApiKey,
+    baseUrl: loaded.config.kayros.apiBaseUrl,
+  };
+}
+
 function resetResult(controls: ProveControls): void {
   for (const output of [
     controls.contentHashOutput,
@@ -326,107 +434,6 @@ function clearError(): void {
   errorMessage.hidden = true;
 }
 
-function kayrosConnection(loaded: LoadedApp): KayrosConnectionOptions {
-  return {
-    apiKey: loaded.kayrosApiKey,
-    baseUrl: loaded.config.kayros.apiBaseUrl,
-  };
-}
-
-function configureKayrosSettings(loaded: LoadedApp): void {
-  kayrosApiKeyInput.disabled = false;
-  saveKayrosApiKeyButton.disabled = false;
-  clearKayrosApiKeyButton.disabled = false;
-  kayrosApiKeyInput.value = loaded.kayrosApiKey;
-  if (loaded.kayrosApiKey.length === 0) {
-    kayrosApiKeyStatus.textContent = "No API key configured";
-    delete kayrosApiKeyStatus.dataset.status;
-    return;
-  }
-  kayrosApiKeyStatus.textContent = loaded.kayrosApiKeySource === "stored"
-    ? "API key saved in this browser profile"
-    : "Development API key loaded; save it to retain a browser setting";
-  kayrosApiKeyStatus.dataset.status = "verified";
-}
-
-async function saveKayrosApiKey(): Promise<void> {
-  if (!loadedApp) {
-    return;
-  }
-  try {
-    const apiKey = normalizeKayrosApiKey(kayrosApiKeyInput.value);
-    await writeStoredKayrosApiKey(apiKey);
-    loadedApp.kayrosApiKey = apiKey;
-    loadedApp.kayrosApiKeySource = "stored";
-    latestKayrosLoaded = false;
-    kayrosApiKeyStatus.textContent = "API key saved in this browser profile";
-    kayrosApiKeyStatus.dataset.status = "verified";
-    if (viewSelector.value === "core") {
-      await refreshLatestKayros(true);
-    }
-  } catch (error) {
-    kayrosApiKeyStatus.textContent = formatError(error);
-    kayrosApiKeyStatus.dataset.status = "invalid";
-  }
-}
-
-async function clearKayrosApiKey(): Promise<void> {
-  if (!loadedApp) {
-    return;
-  }
-  try {
-    await writeStoredKayrosApiKey("");
-    loadedApp.kayrosApiKey = "";
-    loadedApp.kayrosApiKeySource = "stored";
-    kayrosApiKeyInput.value = "";
-    latestKayrosLoaded = false;
-    latestKayrosHash.textContent = "API key required";
-    latestKayrosMetadata.textContent = `${loadedApp.config.kayros.table} · ${loadedApp.config.kayros.dataType}`;
-    latestKayrosError.hidden = true;
-    latestKayrosError.textContent = "";
-    kayrosApiKeyStatus.textContent = "API key cleared; Kayros lookups are disabled";
-    delete kayrosApiKeyStatus.dataset.status;
-  } catch (error) {
-    kayrosApiKeyStatus.textContent = formatError(error);
-    kayrosApiKeyStatus.dataset.status = "invalid";
-  }
-}
-
-async function resolveKayrosApiKey(
-  configApiKey: string,
-): Promise<{ apiKey: string; source: LoadedApp["kayrosApiKeySource"] }> {
-  const stored = await readStoredKayrosApiKey();
-  if (stored !== undefined) {
-    return { apiKey: stored, source: "stored" };
-  }
-  if (configApiKey.length > 0) {
-    return { apiKey: configApiKey, source: "config" };
-  }
-  return { apiKey: "", source: "unset" };
-}
-
-async function readStoredKayrosApiKey(): Promise<string | undefined> {
-  if (hasChromeStorage()) {
-    const values = await chrome.storage.local.get(KAYROS_API_KEY_STORAGE_KEY);
-    const value = values[KAYROS_API_KEY_STORAGE_KEY];
-    return typeof value === "string" ? value : undefined;
-  }
-  const value = localStorage.getItem(KAYROS_API_KEY_STORAGE_KEY);
-  return value === null ? undefined : value;
-}
-
-async function writeStoredKayrosApiKey(value: string): Promise<void> {
-  if (hasChromeStorage()) {
-    await chrome.storage.local.set({ [KAYROS_API_KEY_STORAGE_KEY]: value });
-    return;
-  }
-  localStorage.setItem(KAYROS_API_KEY_STORAGE_KEY, value);
-}
-
-function hasChromeStorage(): boolean {
-  return typeof chrome !== "undefined" && chrome.storage?.local !== undefined;
-}
-
 function assertResponse(response: Response, label: string): void {
   if (!response.ok) {
     throw new Error(`Unable to load ${label} (${response.status})`);
@@ -437,15 +444,15 @@ function assertRuntimeConfig(value: unknown): asserts value is RuntimeConfig {
   if (
     !isRecord(value)
     || value.schemaVersion !== 1
-    || (value.profile !== "development" && value.profile !== "store")
+    || value.profile !== "web"
     || !isRecord(value.kayros)
+    || "apiKey" in value.kayros
     || typeof value.kayros.apiBaseUrl !== "string"
     || typeof value.kayros.dashboardUrl !== "string"
-    || typeof value.kayros.apiKey !== "string"
-    || typeof value.kayros.dataType !== "string"
+    || value.kayros.dataType !== "provable_sdk"
     || value.kayros.table !== "s32_hashes"
   ) {
-    throw new Error("Invalid runtime config");
+    throw new Error("Invalid web runtime config");
   }
 }
 

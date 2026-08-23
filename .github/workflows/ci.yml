@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -32,8 +32,16 @@ jobs:
         run: npm run check
 
       - name: Upload Chrome extension artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: provable-chrome
           path: dist/chrome
           if-no-files-found: error
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: provable-web
+          path: dist/web
+          if-no-files-found: error
+          include-hidden-files: true

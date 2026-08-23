@@ -6,21 +6,24 @@
 
 - npm and Cargo workspaces with pinned JavaScript and Rust lockfiles.
 - `apps/core/` shared contracts, canonical SHA-256 helpers, packaged SHA3-256 WasmX, Kayros SDK adapter, browser WasmX host, and Rust ABI crate.
+- Shared browser resource loader, controlled Markdown form renderer, and notarization-first Prove Inclusion workflow used by every browser adapter.
 - Prove Inclusion reference implementation and Rust/WasmX module consuming both core libraries.
-- Chrome Manifest V3 side-panel slice that hashes the locally packaged module before instantiation.
-- Cross-language tests plus an assembled-artifact check for CSP, local resources, digests, ABI exports, and a zero-import WasmX module.
+- Chrome Manifest V3 side-panel adapter and a static `web/` adapter for GitHub Pages.
+- Reproducible Chrome and web builds with assembled-artifact checks for CSP, local resources, digests, ABI exports, zero-import WasmX modules, and secret-free web configuration.
+- GitHub Actions CI plus a dedicated Pages workflow that builds, verifies, and deploys `dist/web/` from `main`.
 
-The current panel computes an integrity-checked preview. Kayros source-proof verification, execution-record notarization, worker termination, full resource limits, Markdown form rendering, Drive archival, and Safari remain milestone work below.
+The current Chrome and web apps compute an integrity-checked preview, query Kayros `s32_hashes` for `data_type: provable_sdk`, and run the inclusion computation only after a matching notarization is found. Execution-record notarization, worker termination, full resource limits, Drive archival, and Safari remain milestone work below.
 
 ## 1. Goal
 
-Build a desktop browser extension that hosts verifiable WasmX applications in a browser panel. The first application, **Prove Inclusion**, verifies that a text was notarized by Kayros, counts occurrences of one text inside another, evaluates a threshold, and can notarize and archive the resulting execution record.
+Build browser applications and extensions that host verifiable WasmX applications. The first application, **Prove Inclusion**, verifies that a text was notarized by Kayros, counts occurrences of one text inside another, evaluates a threshold, and can notarize and archive the resulting execution record.
 
-The implementation should maximize shared code between Chrome and Safari while isolating browser-specific UI, identity, storage, and packaging behavior behind adapters.
+The implementation should maximize shared behavior across GitHub Pages, Chrome, and Safari while isolating platform-specific navigation, identity, storage, and packaging behind thin adapters.
 
 ### Proposed MVP boundary
 
 - Desktop Chrome with a native extension side panel.
+- A static GitHub Pages deployment built from `web/` with the same Core, Prove Inclusion workflow, Markdown UI, and packaged WasmX modules.
 - macOS Safari with a phase-zero decision on the closest acceptable panel experience.
 - One first-party app: Prove Inclusion.
 - One core app/package under `apps/core/` containing the common contracts, integrity helpers, Kayros integration, runtime interfaces, and reusable WasmX library used by every other app.
@@ -43,6 +46,7 @@ The implementation should maximize shared code between Chrome and Safari while i
 | --- | --- | --- |
 | EXT-01 | Chrome extension | A Manifest V3 build installs cleanly and clicking its action opens the Chrome side panel. |
 | EXT-02 | Safari extension | A signed development build installs on macOS Safari and opens the approved Safari panel equivalent from its toolbar action. |
+| WEB-01 | GitHub Pages app | A verified static build from `web/` deploys from `main`, works below the repository path, and contains no API key. |
 | APP-01 | Apps under `apps/` | `apps/core/` provides the shared TypeScript and WasmX libraries; every independently testable app under `apps/<app-id>/` declares and uses its compatible core version. |
 | WASM-01 | Download, cache, and run WasmX apps | An allowed app source resolves to immutable bytes, verifies successfully, is cached by digest, and executes through the versioned host ABI. |
 | INT-01 | Verify that all executed code is unchanged | Every execution records the app manifest and module digests; a digest/signature mismatch blocks execution before instantiation. |
@@ -125,18 +129,20 @@ Confirm these before creating permanent proof fixtures:
 ## 4. Proposed architecture
 
 ```text
-Chrome side panel / approved Safari panel
-                    |
-             Shared application UI
-                    |
-           Execution orchestrator
-          /         |          \
- App resolver   Runtime host   Proof repository
- verify/cache   + ABI worker    local + Drive
-                    |
-             Capability broker
-             /              \
-      permissioned fetch   Kayros adapter
+GitHub Pages / Chrome side panel / approved Safari panel
+                         |
+              thin platform adapters
+                         |
+          Core browser UI + app workflow
+                         |
+              Execution orchestrator
+             /         |          \
+    App resolver   Runtime host   Proof repository
+    verify/cache   + ABI worker    local + Drive
+                         |
+                 Capability broker
+                 /              \
+          permissioned fetch   Kayros adapter
 ```
 
 ### 4.1 Shared layers
@@ -177,9 +183,9 @@ apps/
     tests/
     wasmx/              # app module using apps/core/wasmx
 extension/
-  shared/             # panel UI and background handlers
   chrome/             # MV3 manifest and Chrome adapter
   safari/             # Safari resources, adapter, containing app project
+web/                  # GitHub Pages platform adapter and application shell
 tests/
   e2e/
   security/
@@ -190,7 +196,7 @@ docs/
   workflows/          # reproducible checks and extension artifacts
 ```
 
-Use npm workspaces and TypeScript for the shared extension code, Rust targeting `wasm32-unknown-unknown` for the initial WasmX ABI and apps, JSON Schema-compatible external contracts, and a workspace build that emits separate Chrome-store, future dynamic-development, and Safari artifacts. Lock JavaScript and Rust dependencies. `apps/core/` is the only place for reusable application libraries; browser-specific adapters remain under `extension/`.
+Use npm workspaces and TypeScript for shared browser code, Rust targeting `wasm32-unknown-unknown` for the initial WasmX ABI and apps, JSON Schema-compatible external contracts, and a workspace build that emits separate web, Chrome-store, future dynamic-development, and Safari artifacts. Lock JavaScript and Rust dependencies. `apps/core/` is the only place for reusable browser libraries; app-specific behavior lives with its app, while `web/` and `extension/` contain thin platform adapters.
 
 ### 4.4 GitHub build and release flow
 
@@ -199,9 +205,9 @@ Use npm workspaces and TypeScript for the shared extension code, Rust targeting 
 3. Compile each app's WasmX module from source and inspect its imports/exports.
 4. Compute the module and UI SHA-256 values and generate the release `app.json` without modifying the source manifest.
 5. Bundle all TypeScript dependencies, including the Kayros SDK, into local extension assets; no CDN imports survive the build.
-6. Assemble Chrome and Safari artifacts containing the exact modules, manifests, UI, icons, and runtime.
-7. Run tamper, ABI, and end-to-end smoke tests against the assembled artifacts.
-8. Publish checksums, SBOM/provenance attestations, and extension artifacts against a protected Git tag. Upload those same bytes to the stores.
+6. Assemble GitHub Pages, Chrome, and Safari artifacts containing the exact modules, manifests, UI, icons, and runtime.
+7. Run tamper, ABI, secret, and end-to-end smoke tests against the assembled artifacts.
+8. Deploy the verified `dist/web/` artifact through GitHub's Pages actions; publish checksums, SBOM/provenance attestations, and extension artifacts against a protected Git tag.
 
 ## 5. App and execution contracts
 
@@ -342,7 +348,7 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 - Scaffold the npm/Cargo workspaces, `apps/core/`, Chrome MV3 extension, Safari development package, formatting, linting, type checking, unit tests, and CI.
 - Implement the common TypeScript integrity/contracts/Kayros/runtime entrypoints and common Rust/WasmX ABI in `apps/core/`; require every app to consume these packages.
 - Build Prove Inclusion as the first dependent WasmX module and cross-check its result against a TypeScript reference implementation.
-- Generate all required extension icon sizes from `static/image/logo.*`; reconcile the README's `static/images` path typo without duplicating sources.
+- Generate all required extension icon sizes from `static/image/logo.*` without duplicating sources.
 - Open an empty themed panel from the Chrome action.
 - Prototype all candidate Safari panel behaviors with the same small UI.
 - Add build-profile checks that prevent dynamic executables or permissions from entering the store artifact.

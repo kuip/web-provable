@@ -22,6 +22,7 @@
   },
   "include": [
     "apps/**/*.ts",
-    "extension/**/*.ts"
+    "extension/**/*.ts",
+    "web/**/*.ts"
   ]
 }

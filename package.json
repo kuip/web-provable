@@ -6,7 +6,8 @@
   "workspaces": [
     "apps/core",
     "apps/prove-inclusion",
-    "extension/chrome"
+    "extension/chrome",
+    "web"
   ],
   "scripts": {
     "build:wasm:apps": "cargo build --workspace --target wasm32-unknown-unknown --release",
@@ -14,13 +15,15 @@
     "build:wasm": "npm run build:wasm:apps && npm run build:wasm:core",
     "build:chrome": "npm run build:wasm && node tools/build-chrome.mjs --profile=development",
     "build:chrome:store": "npm run build:wasm && node tools/build-chrome.mjs --profile=store",
-    "build": "npm run build:chrome",
+    "build:web": "npm run build:wasm && node tools/build-web.mjs",
+    "build": "npm run build:wasm && node tools/build-chrome.mjs --profile=development && node tools/build-web.mjs",
     "verify:chrome": "node tools/verify-chrome.mjs",
+    "verify:web": "node tools/verify-web.mjs",
     "typecheck": "tsc --noEmit",
     "test:js": "vitest run",
     "test:rust": "cargo test --workspace",
     "test": "npm run build:wasm && npm run test:js && npm run test:rust",
-    "check": "npm run typecheck && npm test && npm run build && npm run verify:chrome"
+    "check": "npm run typecheck && npm test && npm run build && npm run verify:chrome && npm run verify:web"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.7",

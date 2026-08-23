@@ -1,0 +1,10 @@
+{
+  "name": "@provable/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@provable/core": "*",
+    "@provable/prove-inclusion": "*"
+  }
+}

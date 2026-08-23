@@ -1,6 +1,7 @@
 import {
   APP_SCHEMA_VERSION,
   WASMX_ABI,
+  type KayrosHashRecord,
   type AppSourceManifest,
 } from "@provable/core";
 
@@ -14,6 +15,22 @@ export interface ProveInclusionOutput {
   count: number;
   result: boolean;
 }
+
+export interface ProveInclusionWorkflowDependencies {
+  findNotarization: (contentHash: string) => Promise<KayrosHashRecord | undefined>;
+  run: (input: ProveInclusionInput) => Promise<ProveInclusionOutput>;
+  sha3_256: (value: string) => string;
+}
+
+export type ProveInclusionWorkflowResult =
+  | { status: "lookup-error"; contentHash: string; error: string }
+  | { status: "not-found"; contentHash: string }
+  | {
+    status: "notarized";
+    contentHash: string;
+    record: KayrosHashRecord;
+    output: ProveInclusionOutput;
+  };
 
 export const PROVE_INCLUSION_APP: AppSourceManifest = {
   schemaVersion: APP_SCHEMA_VERSION,
@@ -51,6 +68,41 @@ export const PROVE_INCLUSION_APP: AppSourceManifest = {
 };
 
 export function computeProveInclusion(input: ProveInclusionInput): ProveInclusionOutput {
+  validateProveInclusionInput(input);
+  const n = input.n ?? 0;
+  const count = countNonOverlappingOccurrences(input.a, input.b);
+  return { count, result: n < count };
+}
+
+export async function runProveInclusionWorkflow(
+  input: ProveInclusionInput,
+  dependencies: ProveInclusionWorkflowDependencies,
+): Promise<ProveInclusionWorkflowResult> {
+  validateProveInclusionInput(input);
+  const contentHash = dependencies.sha3_256(input.a);
+  let record: KayrosHashRecord | undefined;
+  try {
+    record = await dependencies.findNotarization(contentHash);
+  } catch (error) {
+    return {
+      status: "lookup-error",
+      contentHash,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  if (!record) {
+    return { status: "not-found", contentHash };
+  }
+
+  const output = await dependencies.run(input);
+  const reference = computeProveInclusion(input);
+  if (output.count !== reference.count || output.result !== reference.result) {
+    throw new Error("WasmX output did not match the core reference implementation");
+  }
+  return { status: "notarized", contentHash, record, output };
+}
+
+function validateProveInclusionInput(input: ProveInclusionInput): void {
   if (input.b.length === 0) {
     throw new Error("Text B must not be empty");
   }
@@ -58,8 +110,6 @@ export function computeProveInclusion(input: ProveInclusionInput): ProveInclusio
   if (!Number.isSafeInteger(n) || n < 0) {
     throw new Error("N must be a non-negative integer");
   }
-  const count = countNonOverlappingOccurrences(input.a, input.b);
-  return { count, result: n < count };
 }
 
 export function countNonOverlappingOccurrences(haystack: string, needle: string): number {
