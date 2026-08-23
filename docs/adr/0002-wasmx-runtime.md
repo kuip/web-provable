@@ -5,18 +5,18 @@
 
 ## Decision
 
-The first Web Provable runtime executes plain `wasm32-unknown-unknown` modules through the versioned `web-provable:app/1` ABI. The common ABI allocation, JSON-envelope, and error helpers live in `apps/core/wasmx`; every app module links that crate. The matching TypeScript host lives in `apps/core/src`.
+The first Provable runtime executes plain `wasm32-unknown-unknown` modules through the versioned `provable:app/1` ABI. The common ABI allocation, JSON-envelope, SHA3-256, and error helpers live in `apps/core/wasmx`; every app module links that crate. The matching TypeScript host lives in `apps/core/src`.
 
 Version 1 modules have no imports and export linear memory plus:
 
-- `web_provable_abi_version`
-- `web_provable_alloc`
-- `web_provable_dealloc`
-- `web_provable_run`
+- `provable_abi_version`
+- `provable_alloc`
+- `provable_dealloc`
+- `provable_run`
 
 Inputs and outputs are size-limited UTF-8 JSON. Store builds compile and package the module locally, verify its SHA-256, reject imports, and check the required exports before release and again before instantiation.
 
-This ABI is a Web Provable browser contract. It is not a claim that an app is directly compatible with the full `ark-us/wasmx` engine. Any future engine integration must stay behind the shared executor contract and pass the same store-policy, isolation, determinism, and resource-limit gates.
+This ABI is a Provable browser contract. It is not a claim that an app is directly compatible with the full `ark-us/wasmx` engine. Any future engine integration must stay behind the shared executor contract and pass the same store-policy, isolation, determinism, and resource-limit gates.
 
 ## Evidence
 

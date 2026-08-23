@@ -1,5 +1,5 @@
 {
-  "name": "@web-provable/prove-inclusion",
+  "name": "@provable/prove-inclusion",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@web-provable/core": "*"
+    "@provable/core": "*"
   }
 }
-

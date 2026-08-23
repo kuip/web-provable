@@ -1,4 +1,5 @@
 use serde::{de::DeserializeOwned, Serialize};
+use sha3::{Digest, Sha3_256};
 
 pub const ABI_VERSION: u32 = 1;
 
@@ -78,22 +79,62 @@ pub fn leak_output(output: Vec<u8>) -> u64 {
     ((pointer as u64) << 32) | length as u64
 }
 
+pub fn sha3_256(input: &[u8]) -> [u8; 32] {
+    Sha3_256::digest(input).into()
+}
+
 #[macro_export]
-macro_rules! export_web_provable_abi {
+macro_rules! export_provable_abi {
     () => {
         #[no_mangle]
-        pub extern "C" fn web_provable_abi_version() -> u32 {
+        pub extern "C" fn provable_abi_version() -> u32 {
             $crate::ABI_VERSION
         }
 
         #[no_mangle]
-        pub extern "C" fn web_provable_alloc(length: u32) -> u32 {
+        pub extern "C" fn provable_alloc(length: u32) -> u32 {
             $crate::allocate(length)
         }
 
         #[no_mangle]
-        pub unsafe extern "C" fn web_provable_dealloc(pointer: u32, length: u32) {
+        pub unsafe extern "C" fn provable_dealloc(pointer: u32, length: u32) {
             $crate::deallocate(pointer, length)
         }
     };
+}
+
+#[cfg(feature = "module")]
+mod module_exports {
+    crate::export_provable_abi!();
+
+    #[no_mangle]
+    pub unsafe extern "C" fn provable_sha3_256(pointer: u32, length: u32) -> u64 {
+        let input = if length == 0 {
+            &[]
+        } else {
+            std::slice::from_raw_parts(pointer as *const u8, length as usize)
+        };
+        crate::leak_output(crate::sha3_256(input).to_vec())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sha3_256;
+
+    #[test]
+    fn matches_fips_sha3_256_vectors() {
+        assert_eq!(
+            to_hex(&sha3_256(b"")),
+            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+        );
+        assert_eq!(
+            to_hex(&sha3_256(b"abc")),
+            "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532"
+        );
+    }
+
+    fn to_hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    }
 }

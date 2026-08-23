@@ -1,6 +1,6 @@
-# Web Provable Core
+# Provable Core
 
-`apps/core/` is the mandatory shared dependency for Web Provable apps.
+`apps/core/` is the mandatory shared dependency for Provable apps.
 
 - `src/` exposes TypeScript app contracts, canonical hashing, Kayros adapters, and the WasmX browser ABI runner.
 - `wasmx/` exposes the Rust helpers and exported ABI used by every WasmX module.
@@ -11,13 +11,12 @@ An app consumes both layers:
 ```json
 {
   "dependencies": {
-    "@web-provable/core": "*"
+    "@provable/core": "*"
   }
 }
 ```
 
 ```toml
 [dependencies]
-web-provable-wasmx-core = { path = "../../core/wasmx" }
+provable-wasmx-core = { path = "../../core/wasmx" }
 ```
-

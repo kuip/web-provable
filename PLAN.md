@@ -1,11 +1,11 @@
-# Web Provable implementation plan
+# Provable implementation plan
 
 **Status:** Development started. The repository uses `apps/core/` as the shared TypeScript and WasmX foundation, and the MVP store artifacts bundle every executable module from the same GitHub revision.
 
 ### Implemented baseline
 
 - npm and Cargo workspaces with pinned JavaScript and Rust lockfiles.
-- `apps/core/` shared contracts, canonical SHA-256 helpers, Kayros SDK adapter, browser WasmX host, and Rust ABI crate.
+- `apps/core/` shared contracts, canonical SHA-256 helpers, packaged SHA3-256 WasmX, Kayros SDK adapter, browser WasmX host, and Rust ABI crate.
 - Prove Inclusion reference implementation and Rust/WasmX module consuming both core libraries.
 - Chrome Manifest V3 side-panel slice that hashes the locally packaged module before instantiation.
 - Cross-language tests plus an assembled-artifact check for CSP, local resources, digests, ABI exports, and a zero-import WasmX module.
@@ -85,7 +85,7 @@ The referenced WasmX project is a modular blockchain engine and does not, by its
 - Can it be interrupted, memory-bounded, and run without ambient network, DOM, clock, randomness, or storage access?
 - Which licenses and notices must be included in the extension and app packages?
 
-**Gate:** run a fixture module through a versioned `web-provable:app/1` ABI, return schema-validated output, terminate a runaway fixture, and write `docs/adr/0002-wasmx-runtime.md`.
+**Gate:** run a fixture module through a versioned `provable:app/1` ABI, return schema-validated output, terminate a runaway fixture, and write `docs/adr/0002-wasmx-runtime.md`.
 
 ### 3.3 Safari panel behavior
 
@@ -116,7 +116,7 @@ Model this as `KayrosClient` and `KayrosVerifier` interfaces so the rest of the 
 
 Confirm these before creating permanent proof fixtures:
 
-- Whether Google Drive archives should be visible to the user or kept in the hidden app-data folder. Prefer a visible `Web Provable/Proofs` folder for durable evidence and use the narrowest scope that supports it.
+- Whether Google Drive archives should be visible to the user or kept in the hidden app-data folder. Prefer a visible `Provable/Proofs` folder for durable evidence and use the narrowest scope that supports it.
 - Whether a proof archive contains plaintext inputs, digests only, or a user-selectable redaction policy.
 - Which publisher keys are trusted and how key rotation/revocation works.
 - Whether apps are installed from a curated registry, an entered URL, a local file, or all three.
@@ -260,7 +260,7 @@ Never label a record “proved” merely because upload succeeded. Only a locall
 ### 5.5 Drive archive
 
 - Make Drive connection optional and user initiated.
-- Default to one immutable JSON archive per execution under `Web Provable/Proofs/<app-id>/<year>/<month>/` if the visible-folder decision is approved.
+- Default to one immutable JSON archive per execution under `Provable/Proofs/<app-id>/<year>/<month>/` if the visible-folder decision is approved.
 - Name files with the execution ID and record digest, and include the archive schema version and content digest inside the file.
 - Upload with retry-safe identifiers so retries do not create silent duplicates.
 - After upload, download at least during integration tests and verify byte equality/digest.
@@ -293,12 +293,14 @@ Never label a record “proved” merely because upload succeeded. Only a locall
 | Field | Type | Rules |
 | --- | --- | --- |
 | A | Multiline text | Required; size-limited. |
-| proofA | Kayros proof text/file | Required; must verify as binding the canonical bytes of A before the result is recordable. |
 | B | Text | Required and non-empty. |
 | N | Integer | Optional, defaults to `0`; proposed MVP validation is `N >= 0`. |
+| contentHash | Read-only hash | FIPS SHA3-256 of the UTF-8 bytes of A, computed by the packaged Core WasmX module. |
+| kayrosMatch | Read-only boolean | `true` only when `contentHash` exists in `s32_hashes` for `data_type: provable_sdk`. |
+| kayrosTimestamp | Read-only timestamp | ISO-8601 time decoded from the matching Kayros UUID-v1 timestamp. |
+| kayrosBlock | Read-only integer | Matching Kayros level-0 block/position. |
 | C | Read-only integer | Number of matches of B in A. |
 | result | Read-only boolean | `true` exactly when `N < C`; otherwise `false`. |
-| proofStatus | Read-only status | Verification result for proofA against A. |
 
 ### 7.2 Proposed deterministic matching rules
 
@@ -315,12 +317,14 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 ### 7.3 Record flow
 
 1. Validate A, B, and N.
-2. Canonicalize A and verify proofA locally through `KayrosVerifier`.
-3. Allow a preview computation even if verification fails, but disable **Record proof** and clearly label the result unverified.
-4. Execute the verified Prove Inclusion module to obtain C and result.
-5. Construct an execution record that commits to A, B, N, C, result, proofA digest, proof verification metadata, and all code digests. Apply the approved plaintext/redaction policy.
-6. Submit the record digest or canonical record to Kayros according to its contract.
-7. Verify the returned proof locally, persist the complete archive, and optionally save it to Drive.
+2. Compute FIPS SHA3-256 over the UTF-8 bytes of A with the packaged Core WasmX module.
+3. Look up that digest in Kayros table `s32_hashes` with `data_type: provable_sdk`.
+4. If no matching notarization exists, show the failed lookup and do not run the inclusion computation.
+5. Show the matching notarization timestamp and level-0 block/position.
+6. Execute the verified Prove Inclusion module to obtain C and result.
+7. Construct an execution record that commits to A, B, N, C, result, Kayros record metadata, and all code digests. Apply the approved plaintext/redaction policy.
+8. Submit the record digest or canonical record to Kayros according to its contract.
+9. Verify the returned proof locally, persist the complete archive, and optionally save it to Drive.
 
 ## 8. Implementation milestones
 
@@ -357,7 +361,7 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 ### Milestone 3 — App supply chain, cache, and runtime
 
 - Implement manifest validation, trust store, signatures, digest graph, immutable resolver, content-addressed IndexedDB cache, and provenance UI.
-- Implement the `web-provable:app/1` worker/companion protocol and a generated TypeScript/module conformance suite.
+- Implement the `provable:app/1` worker/companion protocol and a generated TypeScript/module conformance suite.
 - Enforce import allowlists, input/output schemas, size/memory/time limits, cancellation, and structured errors.
 - Emit an unsigned local execution record for every completed or failed run.
 
@@ -367,10 +371,10 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 
 - Implement the WasmX module and independent reference implementation.
 - Add ASCII, Unicode, newline, NUL, empty-B, boundary, overlap, invalid-integer, maximum-size, and randomized differential tests.
-- Render A, proofA, B, N, C, result, and proof status in `ui.md`.
+- Render A, B, optional N, content hash, Kayros match/timestamp/block, C, and result in `ui.md`.
 - Use a fake Kayros verifier initially to exercise valid, invalid, and mismatched source proofs.
 
-**Exit:** the app matches the frozen semantics for every fixture and cannot record when proofA does not bind A.
+**Exit:** the app matches the frozen semantics for every fixture and does not count or record when A has no matching Kayros notarization.
 
 ### Milestone 5 — Network capability broker
 
@@ -439,7 +443,7 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 - System theme changes while the panel is open.
 - Install/run/remove/update Prove Inclusion under each permitted build profile.
 - One-byte module tampering is detected before execution.
-- Invalid proofA permits only an explicitly unverified preview.
+- A missing or failed Kayros lookup prevents the inclusion count from running.
 - Valid source proof → computation → Kayros proof → local verification → Drive archive → restore and reverify.
 - Revoked origin/Drive permission and offline recovery are understandable and non-destructive.
 - Keyboard-only and screen-reader smoke tests in both themes and browsers.

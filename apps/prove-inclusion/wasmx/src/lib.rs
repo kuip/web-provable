@@ -1,7 +1,7 @@
+use provable_wasmx_core::{execute_json, export_provable_abi};
 use serde::{Deserialize, Serialize};
-use web_provable_wasmx_core::{execute_json, export_web_provable_abi};
 
-export_web_provable_abi!();
+export_provable_abi!();
 
 #[derive(Deserialize)]
 struct Input {
@@ -17,7 +17,7 @@ struct Output {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn web_provable_run(pointer: u32, length: u32) -> u64 {
+pub unsafe extern "C" fn provable_run(pointer: u32, length: u32) -> u64 {
     execute_json(pointer, length, compute)
 }
 
@@ -52,6 +52,23 @@ mod tests {
             output,
             Output {
                 count: 2,
+                result: true,
+            }
+        );
+    }
+
+    #[test]
+    fn defaults_optional_threshold_to_zero() {
+        let output = compute(Input {
+            a: "abc".to_string(),
+            b: "b".to_string(),
+            n: None,
+        })
+        .expect("valid input");
+        assert_eq!(
+            output,
+            Output {
+                count: 1,
                 result: true,
             }
         );

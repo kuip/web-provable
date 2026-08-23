@@ -1,5 +1,5 @@
 {
-  "name": "web-provable",
+  "name": "provable",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,11 @@
     "extension/chrome"
   ],
   "scripts": {
-    "build:wasm": "cargo build --workspace --target wasm32-unknown-unknown --release",
-    "build:chrome": "npm run build:wasm && node tools/build-chrome.mjs",
+    "build:wasm:apps": "cargo build --workspace --target wasm32-unknown-unknown --release",
+    "build:wasm:core": "cargo build --package provable-wasmx-core --features module --target wasm32-unknown-unknown --release",
+    "build:wasm": "npm run build:wasm:apps && npm run build:wasm:core",
+    "build:chrome": "npm run build:wasm && node tools/build-chrome.mjs --profile=development",
+    "build:chrome:store": "npm run build:wasm && node tools/build-chrome.mjs --profile=store",
     "build": "npm run build:chrome",
     "verify:chrome": "node tools/verify-chrome.mjs",
     "typecheck": "tsc --noEmit",

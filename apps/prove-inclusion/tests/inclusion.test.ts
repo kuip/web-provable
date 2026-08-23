@@ -22,10 +22,16 @@ describe("Prove Inclusion reference implementation", () => {
     });
   });
 
+  it("defaults optional N to zero", () => {
+    expect(computeProveInclusion({ a: "abc", b: "b" })).toEqual({
+      count: 1,
+      result: true,
+    });
+  });
+
   it("rejects an empty B", () => {
     expect(() => computeProveInclusion({ a: "anything", b: "", n: 0 })).toThrow(
       "Text B must not be empty",
     );
   });
 });
-

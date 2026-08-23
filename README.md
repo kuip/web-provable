@@ -1,4 +1,4 @@
-# web-provable
+# Provable
 
 A web browser extension for using and extending Kayros.
 
@@ -31,11 +31,13 @@ An app that:
 
 - given:
   - a text A
-  - a proof of A being notarized by Kayros
   - a text B
   - an integer N (optional): defaults to 0
 - provides:
-  - a search for B into A
+  - the SHA3-256 hash of A
+  - confirmation that the hash exists in Kayros `s32_hashes` with `data_type: provable_sdk`
+  - the Kayros timestamp and block/position where A was notarized
+  - a search for B in A, performed only after the Kayros notarization is found
   - counts C how many times B is found in A
   - returns True if N is less than C, False otherwise
   - ability to record the terms and the answer on Kayros (https://github.com/kuip/provable-sdk)

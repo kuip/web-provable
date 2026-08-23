@@ -3,7 +3,7 @@ name = "prove-inclusion-wasmx"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Prove Inclusion Web Provable WasmX app"
+description = "Prove Inclusion Provable WasmX app"
 
 [lib]
 crate-type = ["cdylib"]
@@ -11,5 +11,4 @@ path = "src/lib.rs"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-web-provable-wasmx-core = { path = "../../core/wasmx" }
-
+provable-wasmx-core = { path = "../../core/wasmx" }

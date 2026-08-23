@@ -15,8 +15,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "paths": {
-      "@web-provable/core": ["./apps/core/src/index.ts"],
-      "@web-provable/prove-inclusion": ["./apps/prove-inclusion/src/index.ts"]
+      "@provable/core": ["./apps/core/src/index.ts"],
+      "@provable/prove-inclusion": ["./apps/prove-inclusion/src/index.ts"]
     },
     "types": ["chrome", "node"]
   },

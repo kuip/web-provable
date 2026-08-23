@@ -1,16 +1,29 @@
 # Prove Inclusion
 
-Check how many times **B** occurs in **A**, verify the supplied Kayros proof for A, and prove whether `N < C`.
+Verify that **A** is notarized on Kayros, then count how many times **B** occurs in **A** with the packaged WasmX module. `N` is optional and defaults to `0`.
+
+## Inputs
 
 {{field:a}}
-
-{{field:proofA}}
 
 {{field:b}}
 
 {{field:n}}
 
-The number of non-overlapping matches is {{field:count}}.
+{{action:run}}
 
-The threshold result is {{field:result}}.
+## Kayros notarization
 
+{{field:contentHash}}
+
+{{field:kayrosMatch}}
+
+{{field:kayrosTimestamp}}
+
+{{field:kayrosBlock}}
+
+## Result
+
+{{field:count}}
+
+{{field:result}}

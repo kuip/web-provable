@@ -1,5 +1,5 @@
 export const APP_SCHEMA_VERSION = 1 as const;
-export const WASMX_ABI = "web-provable:app/1" as const;
+export const WASMX_ABI = "provable:app/1" as const;
 
 export type AppFieldType = "text" | "integer" | "boolean" | "proof";
 export type AppFieldRole = "input" | "output";
@@ -101,4 +101,3 @@ function assertDigestResource(value: unknown, label: string): void {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
-

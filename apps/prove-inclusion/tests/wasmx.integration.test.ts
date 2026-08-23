@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
-import { WasmXModule } from "@web-provable/core";
+import { WasmXModule } from "@provable/core";
 import {
   computeProveInclusion,
   type ProveInclusionInput,
@@ -30,4 +30,3 @@ describe("Prove Inclusion WasmX module", () => {
     );
   });
 });
-

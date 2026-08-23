@@ -2,7 +2,7 @@ import {
   APP_SCHEMA_VERSION,
   WASMX_ABI,
   type AppSourceManifest,
-} from "@web-provable/core";
+} from "@provable/core";
 
 export interface ProveInclusionInput {
   a: string;
@@ -22,16 +22,19 @@ export const PROVE_INCLUSION_APP: AppSourceManifest = {
   version: "0.1.0",
   coreVersion: "^0.1.0",
   title: "Prove Inclusion",
-  description: "Verify a Kayros-notarized text and prove whether another text occurs more than N times.",
+  description: "Verify that A is notarized on Kayros, then count how many times B occurs in A.",
   abi: WASMX_ABI,
   module: { path: "app.wasm" },
   ui: { path: "ui.md" },
   fields: [
     { id: "a", label: "Text A", type: "text", role: "input", required: true },
-    { id: "proofA", label: "Kayros proof of A", type: "proof", role: "input", required: true },
     { id: "b", label: "Text B", type: "text", role: "input", required: true },
-    { id: "n", label: "N", type: "integer", role: "input", default: 0 },
-    { id: "count", label: "Count C", type: "integer", role: "output", readOnly: true },
+    { id: "n", label: "N (optional, defaults to 0)", type: "integer", role: "input" },
+    { id: "contentHash", label: "SHA3-256 of A", type: "text", role: "output", readOnly: true },
+    { id: "kayrosMatch", label: "Notarized on Kayros", type: "boolean", role: "output", readOnly: true },
+    { id: "kayrosTimestamp", label: "Kayros timestamp", type: "text", role: "output", readOnly: true },
+    { id: "kayrosBlock", label: "Kayros block / position", type: "integer", role: "output", readOnly: true },
+    { id: "count", label: "Occurrences of B in A", type: "integer", role: "output", readOnly: true },
     { id: "result", label: "N < C", type: "boolean", role: "output", readOnly: true },
   ],
   capabilities: {
@@ -75,4 +78,3 @@ export function countNonOverlappingOccurrences(haystack: string, needle: string)
   }
   return count;
 }
-

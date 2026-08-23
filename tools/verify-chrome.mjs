@@ -8,8 +8,14 @@ const output = join(root, "dist/chrome");
 const extensionManifest = await readJson(join(output, "manifest.json"));
 
 assert(extensionManifest.manifest_version === 3, "Chrome artifact must use Manifest V3");
+assert(extensionManifest.name === "Provable", "Unexpected extension name");
 assert(extensionManifest.background?.service_worker === "background.js", "Missing local service worker");
 assert(extensionManifest.side_panel?.default_path === "panel.html", "Missing local side panel");
+assert(
+  Array.isArray(extensionManifest.permissions)
+    && extensionManifest.permissions.includes("storage"),
+  "Chrome artifact must permit local Core settings storage",
+);
 assert(
   extensionManifest.content_security_policy?.extension_pages
     === "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'",
@@ -23,35 +29,61 @@ await Promise.all([
   readFile(join(output, "styles.css")),
 ]);
 
+const runtimeConfig = await readJson(join(output, "config.json"));
+assert(runtimeConfig.schemaVersion === 1, "Unexpected runtime config version");
+assert(
+  runtimeConfig.profile === "development" || runtimeConfig.profile === "store",
+  "Unexpected runtime config profile",
+);
+if (runtimeConfig.profile === "store") {
+  assert(runtimeConfig.kayros?.apiKey === "", "Store artifact must not contain a Kayros API key");
+}
+
 const appRoot = join(output, "apps/prove-inclusion");
 const appManifest = await readJson(join(appRoot, "app.json"));
-assert(appManifest.abi === "web-provable:app/1", "Unexpected app ABI");
+assert(appManifest.abi === "provable:app/1", "Unexpected app ABI");
 
 const moduleBytes = await verifyResource(appRoot, appManifest.module, "module");
 await verifyResource(appRoot, appManifest.ui, "UI");
-
-const wasmModule = await WebAssembly.compile(moduleBytes);
-const imports = WebAssembly.Module.imports(wasmModule);
-assert(
-  imports.length === 0,
-  `Packaged WasmX module has forbidden imports: ${imports
-    .map((item) => `${item.module}.${item.name}`)
-    .join(", ")}`,
-);
-
-const exports = new Set(WebAssembly.Module.exports(wasmModule).map((item) => item.name));
-for (const name of [
+const appImports = await verifyWasm(moduleBytes, [
   "memory",
-  "web_provable_abi_version",
-  "web_provable_alloc",
-  "web_provable_dealloc",
-  "web_provable_run",
-]) {
-  assert(exports.has(name), `Packaged WasmX module is missing export: ${name}`);
-}
+  "provable_abi_version",
+  "provable_alloc",
+  "provable_dealloc",
+  "provable_run",
+], "app");
+
+const coreRoot = join(output, "apps/core");
+const coreManifest = await readJson(join(coreRoot, "app.json"));
+const coreModuleBytes = await verifyResource(coreRoot, coreManifest.module, "core module");
+const coreImports = await verifyWasm(coreModuleBytes, [
+  "memory",
+  "provable_abi_version",
+  "provable_alloc",
+  "provable_dealloc",
+  "provable_sha3_256",
+], "core");
 
 console.log(`Verified Chrome artifact at ${output}`);
-console.log(`WasmX imports: ${imports.length}; module SHA-256: ${appManifest.module.sha256}`);
+console.log(`WasmX imports: app=${appImports}, core=${coreImports}`);
+console.log(`App SHA-256: ${appManifest.module.sha256}`);
+console.log(`Core SHA-256: ${coreManifest.module.sha256}`);
+
+async function verifyWasm(bytes, requiredExports, label) {
+  const wasmModule = await WebAssembly.compile(bytes);
+  const imports = WebAssembly.Module.imports(wasmModule);
+  assert(
+    imports.length === 0,
+    `Packaged ${label} WasmX module has forbidden imports: ${imports
+      .map((item) => `${item.module}.${item.name}`)
+      .join(", ")}`,
+  );
+  const exports = new Set(WebAssembly.Module.exports(wasmModule).map((item) => item.name));
+  for (const name of requiredExports) {
+    assert(exports.has(name), `Packaged ${label} WasmX module is missing export: ${name}`);
+  }
+  return imports.length;
+}
 
 async function verifyResource(base, resource, label) {
   assert(resource && typeof resource === "object", `Missing ${label} resource`);

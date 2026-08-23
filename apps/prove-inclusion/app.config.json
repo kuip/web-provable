@@ -5,8 +5,8 @@
   "version": "0.1.0",
   "coreVersion": "^0.1.0",
   "title": "Prove Inclusion",
-  "description": "Verify a Kayros-notarized text and prove whether another text occurs more than N times.",
-  "abi": "web-provable:app/1",
+  "description": "Verify that A is notarized on Kayros, then count how many times B occurs in A.",
+  "abi": "provable:app/1",
   "module": {
     "path": "app.wasm"
   },
@@ -15,10 +15,13 @@
   },
   "fields": [
     { "id": "a", "label": "Text A", "type": "text", "role": "input", "required": true },
-    { "id": "proofA", "label": "Kayros proof of A", "type": "proof", "role": "input", "required": true },
     { "id": "b", "label": "Text B", "type": "text", "role": "input", "required": true },
-    { "id": "n", "label": "N", "type": "integer", "role": "input", "required": false, "default": 0 },
-    { "id": "count", "label": "Count C", "type": "integer", "role": "output", "readOnly": true },
+    { "id": "n", "label": "N (optional, defaults to 0)", "type": "integer", "role": "input", "required": false },
+    { "id": "contentHash", "label": "SHA3-256 of A", "type": "text", "role": "output", "readOnly": true },
+    { "id": "kayrosMatch", "label": "Notarized on Kayros", "type": "boolean", "role": "output", "readOnly": true },
+    { "id": "kayrosTimestamp", "label": "Kayros timestamp", "type": "text", "role": "output", "readOnly": true },
+    { "id": "kayrosBlock", "label": "Kayros block / position", "type": "integer", "role": "output", "readOnly": true },
+    { "id": "count", "label": "Occurrences of B in A", "type": "integer", "role": "output", "readOnly": true },
     { "id": "result", "label": "N < C", "type": "boolean", "role": "output", "readOnly": true }
   ],
   "capabilities": {
@@ -33,4 +36,3 @@
     "maxMemoryPages": 64
   }
 }
-

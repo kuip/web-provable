@@ -1,5 +1,5 @@
 {
-  "name": "@web-provable/core",
+  "name": "@provable/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,4 +13,3 @@
     "@kuip/provable-sdk": "0.1.2"
   }
 }
-

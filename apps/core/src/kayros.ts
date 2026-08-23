@@ -8,9 +8,9 @@ import {
   type ProveSingleHashResponse,
 } from "./kayros-sdk-runtime.js";
 
-import { equalBytes, hexToBytes, sha256Hex } from "./integrity";
+import { bytesToHex, equalBytes, hexToBytes, sha256Hex } from "./integrity";
 
-export const DEFAULT_KAYROS_DATA_TYPE = "web_provable_v1";
+export const DEFAULT_KAYROS_DATA_TYPE = "provable_sdk";
 
 export interface KayrosRequestOptions {
   apiKey?: string;
@@ -31,6 +31,41 @@ export interface KayrosVerification {
   valid: boolean;
   error?: string;
   details?: unknown;
+}
+
+export interface KayrosConnectionOptions {
+  apiKey: string;
+  baseUrl?: string;
+}
+
+export interface KayrosHashRecord {
+  /** Kayros level-0 append position, presented as the record's block/position. */
+  block: number;
+  dataItem: string;
+  dataType: string;
+  hashItem: string;
+  hashType: string;
+  position: number;
+  /** ISO-8601 time decoded from the Kayros UUID v1 timestamp. */
+  timestamp: string;
+  timestampId: string;
+}
+
+export function normalizeKayrosApiKey(value: string): string {
+  const normalized = value.trim();
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalized)) {
+    throw new Error("Kayros API key must be 0x followed by 64 hexadecimal characters");
+  }
+  return normalized;
+}
+
+interface KayrosDatabaseRow {
+  data_item?: unknown;
+  data_type?: unknown;
+  hash_item?: unknown;
+  hash_type?: unknown;
+  position?: unknown;
+  ts?: unknown;
 }
 
 export async function notarizeBytes(
@@ -95,6 +130,50 @@ export async function verifyEnvelopeForBytes(
   return result;
 }
 
+export async function getLatestKayrosHash(
+  options: KayrosConnectionOptions,
+  dataType = DEFAULT_KAYROS_DATA_TYPE,
+): Promise<KayrosHashRecord> {
+  const response = await kayrosFetch(options, "/api/lightnet/database/browse", {
+    method: "POST",
+    body: JSON.stringify({
+      table: "s32_hashes",
+      limit: 1,
+      offset: 0,
+      data_type: dataType,
+      order: "desc",
+    }),
+  });
+  const rows = isRecord(response) && Array.isArray(response.rows) ? response.rows : [];
+  const row = rows[0];
+  if (!isRecord(row)) {
+    throw new Error(`Kayros returned no s32_hashes row for ${dataType}`);
+  }
+  return normalizeDatabaseRow(row);
+}
+
+export async function findKayrosRecordBySha3(
+  sha3Hex: string,
+  options: KayrosConnectionOptions,
+  dataType = DEFAULT_KAYROS_DATA_TYPE,
+): Promise<KayrosHashRecord | undefined> {
+  const dataItem = bytesToBase64(hexToBytes(sha3Hex));
+  const query = new URLSearchParams({
+    data_type: dataType,
+    data_item: dataItem,
+    limit: "1",
+  });
+  const response = await kayrosFetch(
+    options,
+    `/api/lightnet/database/record?${query.toString()}`,
+  );
+  const records = isRecord(response) && Array.isArray(response.records)
+    ? response.records
+    : [];
+  const row = records[0];
+  return isRecord(row) ? normalizeDatabaseRow(row) : undefined;
+}
+
 async function envelopeMatches(envelope: KayrosEnvelope, expectedBytes: Uint8Array): Promise<boolean> {
   if (envelope.getDataFormat() !== "raw_hash") {
     return equalBytes(envelope.getData(), expectedBytes);
@@ -107,4 +186,114 @@ async function envelopeMatches(envelope: KayrosEnvelope, expectedBytes: Uint8Arr
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function kayrosFetch(
+  options: KayrosConnectionOptions,
+  path: string,
+  init: RequestInit = {},
+): Promise<unknown> {
+  if (options.apiKey.length === 0) {
+    throw new Error("Kayros API key is not configured");
+  }
+  const baseUrl = (options.baseUrl ?? "https://kayros.provable.dev").replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Key": options.apiKey,
+      ...init.headers,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Kayros API error: ${response.status} ${response.statusText}`);
+  }
+  return response.json() as Promise<unknown>;
+}
+
+function normalizeDatabaseRow(row: KayrosDatabaseRow): KayrosHashRecord {
+  if (
+    typeof row.data_item !== "string"
+    || typeof row.data_type !== "string"
+    || typeof row.hash_item !== "string"
+    || typeof row.hash_type !== "string"
+    || typeof row.position !== "number"
+    || typeof row.ts !== "string"
+  ) {
+    throw new Error("Kayros returned an invalid s32_hashes record");
+  }
+  return {
+    block: row.position,
+    dataItem: kayrosHashToHex(row.data_item),
+    dataType: row.data_type,
+    hashItem: kayrosHashToHex(row.hash_item),
+    hashType: row.hash_type,
+    position: row.position,
+    timestamp: kayrosTimeUuidToIso(row.ts),
+    timestampId: row.ts,
+  };
+}
+
+const UUID_GREGORIAN_EPOCH = 0x01b21dd213814000n;
+
+export function kayrosTimeUuidToIso(value: string): string {
+  const normalized = value.trim().replace(/-/g, "").toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(normalized)) {
+    throw new Error("Kayros returned an invalid timestamp UUID");
+  }
+
+  const timeLow = BigInt(`0x${normalized.slice(0, 8)}`);
+  const timeMid = BigInt(`0x${normalized.slice(8, 12)}`);
+  const timeHighAndVersion = BigInt(`0x${normalized.slice(12, 16)}`);
+  if (Number(timeHighAndVersion >> 12n) !== 1) {
+    throw new Error("Kayros timestamp is not a UUID v1 value");
+  }
+
+  const timestamp = timeLow
+    | (timeMid << 32n)
+    | ((timeHighAndVersion & 0x0fffn) << 48n);
+  if (timestamp < UUID_GREGORIAN_EPOCH) {
+    throw new Error("Kayros timestamp predates the Unix epoch");
+  }
+
+  const unixMillis = Number((timestamp - UUID_GREGORIAN_EPOCH) / 10_000n);
+  const date = new Date(unixMillis);
+  if (!Number.isFinite(unixMillis) || Number.isNaN(date.getTime())) {
+    throw new Error("Kayros returned an out-of-range timestamp UUID");
+  }
+  return date.toISOString();
+}
+
+export function kayrosHashToHex(value: string): string {
+  const normalized = value.trim().replace(/^0x/, "");
+  if (/^[0-9a-fA-F]{64}$/.test(normalized)) {
+    return normalized.toLowerCase();
+  }
+  const base64 = value.trim().replace(/-/g, "+").replace(/_/g, "/");
+  let binary: string;
+  try {
+    binary = atob(base64);
+  } catch {
+    throw new Error("Kayros returned an invalid encoded hash");
+  }
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  if (bytes.byteLength !== 32) {
+    throw new Error("Kayros returned a hash that is not 32 bytes");
+  }
+  return bytesToHex(bytes);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

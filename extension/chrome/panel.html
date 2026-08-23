@@ -3,68 +3,92 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Web Provable</title>
+    <title>Provable</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <header class="app-header">
-      <img src="icons/logo.png" alt="" width="36" height="36">
-      <div>
-        <p class="eyebrow">Web Provable</p>
-        <h1>Prove Inclusion</h1>
-      </div>
+      <img src="icons/logo.png" alt="" width="34" height="34">
+      <span class="brand">Provable</span>
+      <label class="visually-hidden" for="view-selector">Application</label>
+      <select id="view-selector" aria-label="Application">
+        <option value="core">Core</option>
+        <option value="prove-inclusion" selected>Prove Inclusion</option>
+      </select>
     </header>
 
     <main>
-      <p class="lede">Count exact, non-overlapping occurrences with the packaged, integrity-checked WasmX module.</p>
-
-      <section class="integrity-card" aria-labelledby="integrity-heading">
-        <div>
-          <h2 id="integrity-heading">Code integrity</h2>
-          <p id="module-status" class="status" aria-live="polite">Loading packaged module…</p>
+      <section id="core-view" class="view core-view" hidden>
+        <div class="core-card">
+          <h1>Core</h1>
+          <p class="core-version">Core 0.1.0 · WasmX ABI 1</p>
+          <p>Shared contracts, integrity helpers, Kayros integration, and WasmX runtime libraries for every Provable app.</p>
+          <section class="core-settings" aria-labelledby="kayros-settings-heading">
+            <h2 id="kayros-settings-heading">Kayros connection</h2>
+            <form id="kayros-settings-form">
+              <label for="kayros-api-key">API key</label>
+              <input
+                id="kayros-api-key"
+                type="password"
+                placeholder="0x…"
+                autocomplete="off"
+                spellcheck="false"
+                aria-describedby="kayros-api-key-status"
+                disabled
+              >
+              <p id="kayros-api-key-status" class="field-status" aria-live="polite">Loading settings…</p>
+              <div class="settings-actions">
+                <button id="save-kayros-api-key" type="submit" disabled>Save API key</button>
+                <button id="clear-kayros-api-key" class="secondary-button" type="button" disabled>Clear</button>
+              </div>
+            </form>
+          </section>
+          <section class="latest-kayros" aria-labelledby="latest-kayros-heading">
+            <div class="section-heading-row">
+              <h2 id="latest-kayros-heading">Latest Kayros hash</h2>
+              <a id="kayros-dashboard-link" href="https://dashboard.kayros.provable.dev/" target="_blank" rel="noopener noreferrer">Dashboard</a>
+            </div>
+            <code id="latest-kayros-hash">Select Core to load…</code>
+            <p id="latest-kayros-metadata" class="field-status" aria-live="polite">s32_hashes · provable_sdk</p>
+            <button id="refresh-kayros" class="secondary-button" type="button">Refresh latest hash</button>
+            <p id="latest-kayros-error" class="error" role="alert" hidden></p>
+          </section>
         </div>
-        <details>
-          <summary>Module digest</summary>
-          <code id="module-digest">Pending</code>
-        </details>
       </section>
 
-      <form id="prove-form">
-        <label for="text-a">Text A</label>
-        <textarea id="text-a" rows="7" required placeholder="Text that was notarized by Kayros"></textarea>
-
-        <label for="proof-a">Kayros proof of A</label>
-        <textarea id="proof-a" rows="4" placeholder="Proof envelope integration follows the local computation slice"></textarea>
-        <p id="proof-status" class="field-status" aria-live="polite">Not verified</p>
-
-        <label for="text-b">Text B</label>
-        <input id="text-b" type="text" required placeholder="Text to find">
-
-        <label for="threshold">N</label>
-        <input id="threshold" type="number" min="0" step="1" value="0" required>
-
-        <button id="run-button" type="submit">Compute preview</button>
-      </form>
-
-      <p id="error-message" class="error" role="alert" hidden></p>
-
-      <section class="results" aria-labelledby="results-heading">
-        <h2 id="results-heading">Result</h2>
-        <div class="result-grid">
-          <div>
-            <span>Count C</span>
-            <output id="count-output" for="text-a text-b">—</output>
-          </div>
-          <div>
-            <span>N &lt; C</span>
-            <output id="result-output" for="threshold count-output">—</output>
-          </div>
+      <section id="prove-inclusion-view" class="view app-view">
+        <div id="app-content" class="markdown-app" aria-busy="true">
+          <p class="loading-message">Loading the verified UI template…</p>
         </div>
+
+        <p id="error-message" class="error" role="alert" hidden></p>
+
+        <section class="integrity-card" aria-labelledby="integrity-heading">
+          <div>
+            <h2 id="integrity-heading">Code integrity</h2>
+            <p id="module-status" class="status" aria-live="polite">Loading packaged resources…</p>
+          </div>
+          <details>
+            <summary>Resource digests</summary>
+            <dl class="digest-list">
+              <div>
+                <dt>WasmX module</dt>
+                <dd><code id="module-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>UI template</dt>
+                <dd><code id="ui-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>Core WasmX · SHA3-256</dt>
+                <dd><code id="core-module-digest">Pending</code></dd>
+              </div>
+            </dl>
+          </details>
+        </section>
       </section>
     </main>
 
-    <footer>Core 0.1.0 · WasmX ABI 1</footer>
     <script type="module" src="panel.js"></script>
   </body>
 </html>
-

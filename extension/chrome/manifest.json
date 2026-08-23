@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Web Provable",
+  "name": "Provable",
   "version": "0.1.0",
   "description": "Run integrity-checked proof applications with Kayros.",
   "minimum_chrome_version": "114",
   "permissions": ["sidePanel", "storage"],
+  "host_permissions": ["https://kayros.provable.dev/*"],
   "action": {
-    "default_title": "Open Web Provable",
+    "default_title": "Open Provable",
     "default_icon": {
       "16": "icons/logo.png",
       "32": "icons/logo.png"
@@ -29,4 +30,3 @@
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'"
   }
 }
-
