@@ -2,6 +2,8 @@
 members = [
   "apps/core/wasmx",
   "apps/prove-inclusion/wasmx",
+  "apps/verify-kayros/wasmx",
+  "fixtures/wasmx/runaway",
 ]
 resolver = "2"
 
@@ -11,4 +13,3 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
-

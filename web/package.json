@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@provable/core": "*",
-    "@provable/prove-inclusion": "*"
+    "@provable/prove-inclusion": "*",
+    "@provable/verify-kayros": "*"
   }
 }

@@ -55,11 +55,16 @@ main {
 }
 
 .app-header {
+  position: sticky;
+  z-index: 20;
+  top: 0;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 .app-header img {
@@ -170,6 +175,9 @@ main {
 h1,
 h2,
 h3,
+h4,
+h5,
+h6,
 p,
 dl,
 dd {
@@ -191,7 +199,18 @@ h3 {
   font-size: 0.94rem;
 }
 
-.markdown-app > form > p,
+h4 {
+  margin: 18px 0 7px;
+  font-size: 0.89rem;
+}
+
+h5,
+h6 {
+  margin: 16px 0 7px;
+  font-size: 0.84rem;
+}
+
+.markdown-tab-panel > p,
 .core-card p:last-child,
 .field-status,
 .status,
@@ -199,8 +218,100 @@ h3 {
   color: var(--muted);
 }
 
-.markdown-app > form > p {
+.markdown-tab-panel > p {
   line-height: 1.55;
+}
+
+.markdown-tabs-sticky {
+  position: sticky;
+  z-index: 6;
+  top: var(--provable-shell-header-height, 63px);
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.markdown-tab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.markdown-tab {
+  width: auto;
+  flex: 1 1 130px;
+  margin: 0;
+  padding: 9px 12px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.markdown-tab:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-soft);
+}
+
+.markdown-tab[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.markdown-tab.documentation-tab {
+  flex: 0 0 44px;
+  padding-inline: 9px;
+  font-size: 1.08rem;
+}
+
+.documentation-tab-icon {
+  display: block;
+  line-height: 1;
+}
+
+.markdown-tab-panel {
+  padding-top: 18px;
+  scroll-margin-top: 180px;
+}
+
+.documentation-navigation {
+  margin-top: 9px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.documentation-navigation-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 7px;
+}
+
+.documentation-navigation-field {
+  min-width: 0;
+}
+
+.documentation-navigation-field select {
+  padding: 7px 25px 7px 8px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.documentation-panel > h1 {
+  margin-bottom: 10px;
+}
+
+.documentation-panel > p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.documentation-heading {
+  scroll-margin-top: 190px;
 }
 
 .inline-code {
@@ -342,7 +453,7 @@ output[data-value="false"] {
 }
 
 .integrity-card {
-  margin-top: auto;
+  margin-top: 38px;
   padding-top: 28px;
   border-top: 1px solid var(--border);
 }

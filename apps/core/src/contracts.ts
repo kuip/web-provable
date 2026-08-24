@@ -1,3 +1,5 @@
+import { assertAppJsonSchema, type AppJsonSchema } from "./json-schema";
+
 export const APP_SCHEMA_VERSION = 1 as const;
 export const WASMX_ABI = "provable:app/1" as const;
 
@@ -27,6 +29,13 @@ export interface AppResourceLimits {
   maxMemoryPages: number;
 }
 
+export const APP_RESOURCE_LIMIT_CAPS = {
+  maxInputBytes: 16 * 1024 * 1024,
+  maxOutputBytes: 16 * 1024 * 1024,
+  timeoutMs: 60_000,
+  maxMemoryPages: 256,
+} as const;
+
 export interface AppSourceManifest {
   schemaVersion: typeof APP_SCHEMA_VERSION;
   id: string;
@@ -43,6 +52,8 @@ export interface AppSourceManifest {
     path: string;
   };
   fields: AppFieldDefinition[];
+  inputSchema: AppJsonSchema;
+  outputSchema: AppJsonSchema;
   capabilities: AppCapabilities;
   resourceLimits: AppResourceLimits;
 }
@@ -71,6 +82,9 @@ export function assertAppReleaseManifest(value: unknown): asserts value is AppRe
   }
   assertDigestResource(value.module, "module");
   assertDigestResource(value.ui, "ui");
+  assertAppJsonSchema(value.inputSchema, "App input schema");
+  assertAppJsonSchema(value.outputSchema, "App output schema");
+  assertAppResourceLimits(value.resourceLimits);
   if (!Array.isArray(value.fields)) {
     throw new Error("App manifest fields must be an array");
   }
@@ -83,6 +97,30 @@ export function assertAppReleaseManifest(value: unknown): asserts value is AppRe
       throw new Error(`Duplicate app field: ${field.id}`);
     }
     fieldIds.add(field.id);
+  }
+}
+
+export function assertAppResourceLimits(value: unknown): asserts value is AppResourceLimits {
+  if (!isRecord(value)) {
+    throw new Error("App manifest resource limits must be an object");
+  }
+  for (const key of [
+    "maxInputBytes",
+    "maxOutputBytes",
+    "timeoutMs",
+    "maxMemoryPages",
+  ] as const) {
+    const limit = value[key];
+    if (
+      typeof limit !== "number"
+      || !Number.isSafeInteger(limit)
+      || limit <= 0
+      || limit > APP_RESOURCE_LIMIT_CAPS[key]
+    ) {
+      throw new Error(
+        `Invalid ${key} resource limit; expected 1–${APP_RESOURCE_LIMIT_CAPS[key]}`,
+      );
+    }
   }
 }
 

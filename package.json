@@ -6,6 +6,7 @@
   "workspaces": [
     "apps/core",
     "apps/prove-inclusion",
+    "apps/verify-kayros",
     "extension/chrome",
     "web"
   ],
@@ -19,8 +20,10 @@
     "build": "npm run build:wasm && node tools/build-chrome.mjs --profile=development && node tools/build-web.mjs",
     "verify:chrome": "node tools/verify-chrome.mjs",
     "verify:web": "node tools/verify-web.mjs",
+    "smoke:verify-kayros": "npm run build:wasm && esbuild tools/smoke-verify-kayros.ts --bundle --platform=node --format=esm --outfile=target/smoke-verify-kayros.mjs && node target/smoke-verify-kayros.mjs",
+    "build:test-worker": "node tools/build-test-worker.mjs",
     "typecheck": "tsc --noEmit",
-    "test:js": "vitest run",
+    "test:js": "npm run build:test-worker && vitest run",
     "test:rust": "cargo test --workspace",
     "test": "npm run build:wasm && npm run test:js && npm run test:rust",
     "check": "npm run typecheck && npm test && npm run build && npm run verify:chrome && npm run verify:web"

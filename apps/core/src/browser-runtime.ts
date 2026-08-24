@@ -1,6 +1,10 @@
 import { assertAppReleaseManifest, type AppReleaseManifest } from "./contracts";
 import { sha256Hex } from "./integrity";
-import { WasmXModule, WasmXSha3Module } from "./wasmx";
+import {
+  type AppExecutor,
+  WasmXSha3Module,
+  WasmXWorkerModule,
+} from "./wasmx";
 
 export interface CoreReleaseManifest {
   id: "core";
@@ -17,7 +21,7 @@ export interface VerifiedBrowserApp<TInput, TOutput> {
   manifest: AppReleaseManifest;
   markdown: string;
   moduleDigest: string;
-  runner: WasmXModule<TInput, TOutput>;
+  runner: AppExecutor<TInput, TOutput>;
   sha3: WasmXSha3Module;
   uiDigest: string;
 }
@@ -25,6 +29,7 @@ export interface VerifiedBrowserApp<TInput, TOutput> {
 export interface VerifiedBrowserAppOptions {
   appManifestUrl: string;
   coreManifestUrl: string;
+  workerUrl: string;
 }
 
 /** Loads, digest-checks, and instantiates the browser resources shared by every platform. */
@@ -74,10 +79,17 @@ export async function loadVerifiedBrowserApp<TInput, TOutput>(
   assertDigest(coreDigest, coreManifestValue.module.sha256, "core WasmX");
 
   const [runner, sha3] = await Promise.all([
-    WasmXModule.instantiate<TInput, TOutput>(moduleBytes, {
-      maxOutputBytes: manifestValue.resourceLimits.maxOutputBytes,
+    WasmXWorkerModule.instantiate<TInput, TOutput>(moduleBytes, {
+      expectedSha256: manifestValue.module.sha256,
+      limits: manifestValue.resourceLimits,
+      inputSchema: manifestValue.inputSchema,
+      outputSchema: manifestValue.outputSchema,
+      workerFactory: () => new Worker(options.workerUrl, {
+        type: "module",
+        name: `provable-${manifestValue.id}`,
+      }),
     }),
-    WasmXSha3Module.instantiate(coreModuleBytes),
+    WasmXSha3Module.instantiate(coreModuleBytes, { maxMemoryPages: 64 }),
   ]);
 
   return {

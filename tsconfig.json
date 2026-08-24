@@ -16,7 +16,8 @@
     "skipLibCheck": true,
     "paths": {
       "@provable/core": ["./apps/core/src/index.ts"],
-      "@provable/prove-inclusion": ["./apps/prove-inclusion/src/index.ts"]
+      "@provable/prove-inclusion": ["./apps/prove-inclusion/src/index.ts"],
+      "@provable/verify-kayros": ["./apps/verify-kayros/src/index.ts"]
     },
     "types": ["chrome", "node"]
   },

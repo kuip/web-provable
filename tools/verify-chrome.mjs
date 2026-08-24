@@ -18,7 +18,7 @@ assert(
 );
 assert(
   extensionManifest.content_security_policy?.extension_pages
-    === "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'",
+    === "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; object-src 'none'",
   "Unexpected extension-page content security policy",
 );
 
@@ -26,6 +26,7 @@ await Promise.all([
   readFile(join(output, extensionManifest.background.service_worker)),
   readFile(join(output, extensionManifest.side_panel.default_path)),
   readFile(join(output, "panel.js")),
+  readFile(join(output, "wasmx-worker.js")),
   readFile(join(output, "styles.css")),
 ]);
 
@@ -39,19 +40,10 @@ if (runtimeConfig.profile === "store") {
   assert(runtimeConfig.kayros?.apiKey === "", "Store artifact must not contain a Kayros API key");
 }
 
-const appRoot = join(output, "apps/prove-inclusion");
-const appManifest = await readJson(join(appRoot, "app.json"));
-assert(appManifest.abi === "provable:app/1", "Unexpected app ABI");
-
-const moduleBytes = await verifyResource(appRoot, appManifest.module, "module");
-await verifyResource(appRoot, appManifest.ui, "UI");
-const appImports = await verifyWasm(moduleBytes, [
-  "memory",
-  "provable_abi_version",
-  "provable_alloc",
-  "provable_dealloc",
-  "provable_run",
-], "app");
+const appVerifications = await Promise.all([
+  verifyApp("prove-inclusion", "Prove Inclusion"),
+  verifyApp("verify-kayros", "Verify Kayros"),
+]);
 
 const coreRoot = join(output, "apps/core");
 const coreManifest = await readJson(join(coreRoot, "app.json"));
@@ -65,9 +57,40 @@ const coreImports = await verifyWasm(coreModuleBytes, [
 ], "core");
 
 console.log(`Verified Chrome artifact at ${output}`);
-console.log(`WasmX imports: app=${appImports}, core=${coreImports}`);
-console.log(`App SHA-256: ${appManifest.module.sha256}`);
+console.log(`WasmX imports: apps=${appVerifications.map((app) => `${app.id}:${app.imports}`).join(",")}, core=${coreImports}`);
+for (const app of appVerifications) {
+  console.log(`${app.title} SHA-256: ${app.manifest.module.sha256}`);
+}
 console.log(`Core SHA-256: ${coreManifest.module.sha256}`);
+
+async function verifyApp(id, title) {
+  const appRoot = join(output, "apps", id);
+  const manifest = await readJson(join(appRoot, "app.json"));
+  assert(manifest.id === id, `Unexpected ${title} app id`);
+  assert(manifest.abi === "provable:app/1", `Unexpected ${title} app ABI`);
+  assertClosedObjectSchema(manifest.inputSchema, `${title} input`);
+  assertClosedObjectSchema(manifest.outputSchema, `${title} output`);
+  const moduleBytes = await verifyResource(appRoot, manifest.module, `${title} module`);
+  await verifyResource(appRoot, manifest.ui, `${title} UI`);
+  const imports = await verifyWasm(moduleBytes, [
+    "memory",
+    "provable_abi_version",
+    "provable_alloc",
+    "provable_dealloc",
+    "provable_run",
+  ], title);
+  return { id, title, manifest, imports };
+}
+
+function assertClosedObjectSchema(schema, label) {
+  assert(
+    schema?.type === "object"
+      && schema.properties
+      && typeof schema.properties === "object"
+      && schema.additionalProperties === false,
+    `Invalid ${label} schema`,
+  );
+}
 
 async function verifyWasm(bytes, requiredExports, label) {
   const wasmModule = await WebAssembly.compile(bytes);

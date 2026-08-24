@@ -46,6 +46,8 @@ export interface KayrosHashRecord {
   hashItem: string;
   hashType: string;
   position: number;
+  /** Previous level-0 record hash. Missing only when the endpoint omits it. */
+  prevHash?: string;
   /** ISO-8601 time decoded from the Kayros UUID v1 timestamp. */
   timestamp: string;
   timestampId: string;
@@ -65,6 +67,7 @@ interface KayrosDatabaseRow {
   hash_item?: unknown;
   hash_type?: unknown;
   position?: unknown;
+  prev_hash?: unknown;
   ts?: unknown;
 }
 
@@ -157,11 +160,24 @@ export async function findKayrosRecordBySha3(
   options: KayrosConnectionOptions,
   dataType = DEFAULT_KAYROS_DATA_TYPE,
 ): Promise<KayrosHashRecord | undefined> {
-  const dataItem = bytesToBase64(hexToBytes(sha3Hex));
+  return (await findKayrosRecordsByDataItem(sha3Hex, options, dataType, 1))[0];
+}
+
+export async function findKayrosRecordsByDataItem(
+  dataItemHex: string,
+  options: KayrosConnectionOptions,
+  dataType = DEFAULT_KAYROS_DATA_TYPE,
+  limit = 10,
+): Promise<KayrosHashRecord[]> {
+  const normalizedDataItem = kayrosHashToHex(dataItemHex);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error("Kayros record limit must be an integer from 1 to 100");
+  }
+  const dataItem = bytesToBase64(hexToBytes(normalizedDataItem));
   const query = new URLSearchParams({
     data_type: dataType,
     data_item: dataItem,
-    limit: "1",
+    limit: String(limit),
   });
   const response = await kayrosFetch(
     options,
@@ -170,8 +186,43 @@ export async function findKayrosRecordBySha3(
   const records = isRecord(response) && Array.isArray(response.records)
     ? response.records
     : [];
-  const row = records[0];
-  return isRecord(row) ? normalizeDatabaseRow(row) : undefined;
+  return records.map((row) => {
+    if (!isRecord(row)) {
+      throw new Error("Kayros returned an invalid s32_hashes record");
+    }
+    const record = normalizeDatabaseRow(row);
+    if (record.dataType !== dataType || record.dataItem !== normalizedDataItem) {
+      throw new Error("Kayros returned a record that does not match the data-item query");
+    }
+    return record;
+  });
+}
+
+export async function findKayrosRecordByHash(
+  recordHashHex: string,
+  options: KayrosConnectionOptions,
+  dataType = DEFAULT_KAYROS_DATA_TYPE,
+): Promise<KayrosHashRecord | undefined> {
+  const normalizedRecordHash = kayrosHashToHex(recordHashHex);
+  const query = new URLSearchParams({
+    hash: bytesToBase64(hexToBytes(normalizedRecordHash)),
+    data_type: dataType,
+  });
+  const response = await kayrosFetchOptional(
+    options,
+    `/api/lightnet/database/record-by-hash?${query.toString()}`,
+  );
+  if (response === undefined) {
+    return undefined;
+  }
+  if (!isRecord(response)) {
+    throw new Error("Kayros returned an invalid s32_hashes record");
+  }
+  const record = normalizeDatabaseRow(response);
+  if (record.dataType !== dataType || record.hashItem !== normalizedRecordHash) {
+    throw new Error("Kayros returned a record that does not match the record-hash query");
+  }
+  return record;
 }
 
 async function envelopeMatches(envelope: KayrosEnvelope, expectedBytes: Uint8Array): Promise<boolean> {
@@ -193,6 +244,33 @@ async function kayrosFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<unknown> {
+  const response = await requestKayros(options, path, init);
+  if (!response.ok) {
+    throw new Error(`Kayros API error: ${response.status} ${response.statusText}`);
+  }
+  return response.json() as Promise<unknown>;
+}
+
+async function kayrosFetchOptional(
+  options: KayrosConnectionOptions,
+  path: string,
+  init: RequestInit = {},
+): Promise<unknown | undefined> {
+  const response = await requestKayros(options, path, init);
+  if (response.status === 404) {
+    return undefined;
+  }
+  if (!response.ok) {
+    throw new Error(`Kayros API error: ${response.status} ${response.statusText}`);
+  }
+  return response.json() as Promise<unknown>;
+}
+
+async function requestKayros(
+  options: KayrosConnectionOptions,
+  path: string,
+  init: RequestInit,
+): Promise<Response> {
   if (options.apiKey.length === 0) {
     throw new Error("Kayros API key is not configured");
   }
@@ -205,10 +283,7 @@ async function kayrosFetch(
       ...init.headers,
     },
   });
-  if (!response.ok) {
-    throw new Error(`Kayros API error: ${response.status} ${response.statusText}`);
-  }
-  return response.json() as Promise<unknown>;
+  return response;
 }
 
 function normalizeDatabaseRow(row: KayrosDatabaseRow): KayrosHashRecord {
@@ -222,7 +297,7 @@ function normalizeDatabaseRow(row: KayrosDatabaseRow): KayrosHashRecord {
   ) {
     throw new Error("Kayros returned an invalid s32_hashes record");
   }
-  return {
+  const record: KayrosHashRecord = {
     block: row.position,
     dataItem: kayrosHashToHex(row.data_item),
     dataType: row.data_type,
@@ -232,6 +307,13 @@ function normalizeDatabaseRow(row: KayrosDatabaseRow): KayrosHashRecord {
     timestamp: kayrosTimeUuidToIso(row.ts),
     timestampId: row.ts,
   };
+  if (row.prev_hash !== undefined) {
+    if (typeof row.prev_hash !== "string") {
+      throw new Error("Kayros returned an invalid previous hash");
+    }
+    record.prevHash = kayrosHashToHex(row.prev_hash);
+  }
+  return record;
 }
 
 const UUID_GREGORIAN_EPOCH = 0x01b21dd213814000n;

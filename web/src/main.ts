@@ -1,12 +1,15 @@
 import {
+  findKayrosRecordByHash,
   findKayrosRecordBySha3,
+  findKayrosRecordsByDataItem,
   getLatestKayrosHash,
   loadVerifiedBrowserApp,
   normalizeKayrosApiKey,
+  observeBrowserHeaderHeight,
   renderBrowserMarkdownForm,
+  type AppExecutor,
   type AppReleaseManifest,
   type KayrosConnectionOptions,
-  type WasmXModule,
   type WasmXSha3Module,
 } from "@provable/core";
 import {
@@ -14,6 +17,12 @@ import {
   type ProveInclusionInput,
   type ProveInclusionOutput,
 } from "@provable/prove-inclusion";
+import {
+  runVerifyKayrosWorkflow,
+  type VerifyKayrosLookup,
+  type VerifyKayrosModuleInput,
+  type VerifyKayrosOutput,
+} from "@provable/verify-kayros";
 
 interface RuntimeConfig {
   schemaVersion: 1;
@@ -30,7 +39,13 @@ interface LoadedApp {
   config: RuntimeConfig;
   kayrosApiKey: string;
   manifest: AppReleaseManifest;
-  runner: WasmXModule<ProveInclusionInput, ProveInclusionOutput>;
+  runner: AppExecutor<ProveInclusionInput, ProveInclusionOutput>;
+  sha3: WasmXSha3Module;
+}
+
+interface LoadedVerifyKayrosApp {
+  manifest: AppReleaseManifest;
+  runner: AppExecutor<VerifyKayrosModuleInput, VerifyKayrosOutput>;
   sha3: WasmXSha3Module;
 }
 
@@ -48,9 +63,28 @@ interface ProveControls {
   runButton: HTMLButtonElement;
 }
 
+interface VerifyKayrosControls {
+  form: HTMLFormElement;
+  recordHash: HTMLInputElement;
+  dataItem: HTMLInputElement;
+  lookupStatus: HTMLOutputElement;
+  recordDataType: HTMLOutputElement;
+  recordDataItem: HTMLOutputElement;
+  previousHash: HTMLOutputElement;
+  storedHash: HTMLOutputElement;
+  localHash: HTMLOutputElement;
+  hashType: HTMLOutputElement;
+  hashMatches: HTMLOutputElement;
+  kayrosTimestamp: HTMLOutputElement;
+  kayrosBlock: HTMLOutputElement;
+  runButton: HTMLButtonElement;
+}
+
 const viewSelector = requiredElement<HTMLSelectElement>("view-selector");
+const shellHeader = requiredElement<HTMLElement>("shell-header");
 const coreView = requiredElement<HTMLElement>("core-view");
 const proveInclusionView = requiredElement<HTMLElement>("prove-inclusion-view");
+const verifyKayrosView = requiredElement<HTMLElement>("verify-kayros-view");
 const appContent = requiredElement<HTMLElement>("app-content");
 const moduleStatus = requiredElement<HTMLElement>("module-status");
 const moduleDigest = requiredElement<HTMLElement>("module-digest");
@@ -68,12 +102,21 @@ const kayrosApiKeyInput = requiredElement<HTMLInputElement>("kayros-api-key");
 const kayrosApiKeyStatus = requiredElement<HTMLElement>("kayros-api-key-status");
 const saveKayrosApiKeyButton = requiredElement<HTMLButtonElement>("save-kayros-api-key");
 const clearKayrosApiKeyButton = requiredElement<HTMLButtonElement>("clear-kayros-api-key");
+const codeIntegrity = requiredElement<HTMLElement>("code-integrity");
+const verifyKayrosContent = requiredElement<HTMLElement>("verify-kayros-content");
+const verifyKayrosError = requiredElement<HTMLElement>("verify-kayros-error");
+const verifyKayrosIntegrity = requiredElement<HTMLElement>("verify-kayros-integrity");
+const verifyKayrosModuleStatus = requiredElement<HTMLElement>("verify-kayros-module-status");
+const verifyKayrosModuleDigest = requiredElement<HTMLElement>("verify-kayros-module-digest");
+const verifyKayrosUiDigest = requiredElement<HTMLElement>("verify-kayros-ui-digest");
+const verifyKayrosCoreDigest = requiredElement<HTMLElement>("verify-kayros-core-digest");
 
 const KAYROS_API_KEY_STORAGE_KEY = "provable.web.kayrosApiKey";
 const MAX_URL_FRAGMENT_LENGTH = 1_500_000;
 let loadedApp: LoadedApp | undefined;
 let latestKayrosLoaded = false;
 
+observeBrowserHeaderHeight(shellHeader);
 viewSelector.addEventListener("change", showSelectedView);
 refreshKayrosButton.addEventListener("click", () => {
   void refreshLatestKayros(true);
@@ -93,10 +136,17 @@ void initialize().catch(showLoadError);
 
 async function initialize(): Promise<void> {
   moduleStatus.textContent = "Verifying packaged UI, app module, and core module…";
-  const [verified, configResponse] = await Promise.all([
+  verifyKayrosModuleStatus.textContent = "Verifying packaged UI, app module, and core module…";
+  const [verified, verifyKayros, configResponse] = await Promise.all([
     loadVerifiedBrowserApp<ProveInclusionInput, ProveInclusionOutput>({
       appManifestUrl: "./apps/prove-inclusion/app.json",
       coreManifestUrl: "./apps/core/app.json",
+      workerUrl: "./assets/wasmx-worker.js",
+    }),
+    loadVerifiedBrowserApp<VerifyKayrosModuleInput, VerifyKayrosOutput>({
+      appManifestUrl: "./apps/verify-kayros/app.json",
+      coreManifestUrl: "./apps/core/app.json",
+      workerUrl: "./assets/wasmx-worker.js",
     }),
     fetch("./config.json"),
   ]);
@@ -120,8 +170,23 @@ async function initialize(): Promise<void> {
   coreModuleDigest.textContent = verified.coreDigest;
   moduleStatus.textContent = "Packaged UI and modules verified";
   moduleStatus.dataset.status = "verified";
+  verifyKayrosModuleDigest.textContent = verifyKayros.moduleDigest;
+  verifyKayrosUiDigest.textContent = verifyKayros.uiDigest;
+  verifyKayrosCoreDigest.textContent = verifyKayros.coreDigest;
+  verifyKayrosModuleStatus.textContent = "Packaged UI and modules verified";
+  verifyKayrosModuleStatus.dataset.status = "verified";
+
+  const verifyKayrosApp: LoadedVerifyKayrosApp = {
+    manifest: verifyKayros.manifest,
+    runner: verifyKayros.runner,
+    sha3: verifyKayros.sha3,
+  };
 
   const controls = renderAppTemplate(verified.markdown, verified.manifest);
+  const verifyControls = renderVerifyKayrosTemplate(
+    verifyKayros.markdown,
+    verifyKayros.manifest,
+  );
   controls.form.addEventListener("submit", (event) => {
     event.preventDefault();
     void runPreview(loaded, controls);
@@ -129,9 +194,17 @@ async function initialize(): Promise<void> {
   for (const field of [controls.textA, controls.textB, controls.threshold]) {
     field.addEventListener("input", () => resetResult(controls));
   }
-  applyUrlPrefill(controls);
+  verifyControls.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void runVerifyKayrosPreview(loaded, verifyKayrosApp, verifyControls);
+  });
+  for (const field of [verifyControls.recordHash, verifyControls.dataItem]) {
+    field.addEventListener("input", () => resetVerifyKayrosResult(verifyControls));
+  }
+  applyUrlPrefill(controls, verifyControls);
 
   appContent.ariaBusy = "false";
+  verifyKayrosContent.ariaBusy = "false";
   if (viewSelector.value === "core") {
     void refreshLatestKayros();
   }
@@ -140,6 +213,7 @@ async function initialize(): Promise<void> {
 function renderAppTemplate(markdown: string, manifest: AppReleaseManifest): ProveControls {
   const rendered = renderBrowserMarkdownForm(markdown, manifest, {
     actionLabels: { run: "Verify A and count B" },
+    documentationFooter: codeIntegrity,
     inputPlaceholders: {
       a: "Text whose SHA3-256 should be recorded by Kayros",
       b: "Text to find",
@@ -162,6 +236,113 @@ function renderAppTemplate(markdown: string, manifest: AppReleaseManifest): Prov
     resultOutput: requiredRendered<HTMLOutputElement>(rendered.fields, "result"),
     runButton: requiredRendered<HTMLButtonElement>(rendered.actions, "run"),
   };
+}
+
+function renderVerifyKayrosTemplate(
+  markdown: string,
+  manifest: AppReleaseManifest,
+): VerifyKayrosControls {
+  const rendered = renderBrowserMarkdownForm(markdown, manifest, {
+    actionLabels: { run: "Search and verify locally" },
+    documentationFooter: verifyKayrosIntegrity,
+    inputPlaceholders: {
+      recordHash: "64 hexadecimal characters or 32-byte Base64",
+      dataItem: "64 hexadecimal characters or 32-byte Base64",
+    },
+    multilineTextFields: [],
+  });
+  rendered.form.id = "verify-kayros-form";
+  verifyKayrosContent.replaceChildren(rendered.form);
+  return {
+    form: rendered.form,
+    recordHash: requiredRendered<HTMLInputElement>(rendered.fields, "recordHash"),
+    dataItem: requiredRendered<HTMLInputElement>(rendered.fields, "dataItem"),
+    lookupStatus: requiredRendered<HTMLOutputElement>(rendered.fields, "lookupStatus"),
+    recordDataType: requiredRendered<HTMLOutputElement>(rendered.fields, "recordDataType"),
+    recordDataItem: requiredRendered<HTMLOutputElement>(rendered.fields, "recordDataItem"),
+    previousHash: requiredRendered<HTMLOutputElement>(rendered.fields, "previousHash"),
+    storedHash: requiredRendered<HTMLOutputElement>(rendered.fields, "storedHash"),
+    localHash: requiredRendered<HTMLOutputElement>(rendered.fields, "localHash"),
+    hashType: requiredRendered<HTMLOutputElement>(rendered.fields, "hashType"),
+    hashMatches: requiredRendered<HTMLOutputElement>(rendered.fields, "hashMatches"),
+    kayrosTimestamp: requiredRendered<HTMLOutputElement>(rendered.fields, "kayrosTimestamp"),
+    kayrosBlock: requiredRendered<HTMLOutputElement>(rendered.fields, "kayrosBlock"),
+    runButton: requiredRendered<HTMLButtonElement>(rendered.actions, "run"),
+  };
+}
+
+async function runVerifyKayrosPreview(
+  runtime: LoadedApp,
+  app: LoadedVerifyKayrosApp,
+  controls: VerifyKayrosControls,
+): Promise<void> {
+  setVerifyKayrosBusy(controls, true);
+  clearVerifyKayrosError();
+  try {
+    const workflow = await runVerifyKayrosWorkflow(readVerifyKayrosLookup(controls), {
+      findByRecordHash: (recordHash) => findKayrosRecordByHash(
+        recordHash,
+        kayrosConnection(runtime),
+        runtime.config.kayros.dataType,
+      ),
+      findByDataItem: (dataItem) => findKayrosRecordsByDataItem(
+        dataItem,
+        kayrosConnection(runtime),
+        runtime.config.kayros.dataType,
+      ),
+      run: async (moduleInput) => {
+        const inputBytes = new TextEncoder().encode(JSON.stringify(moduleInput));
+        if (inputBytes.byteLength > app.manifest.resourceLimits.maxInputBytes) {
+          throw new Error("Kayros record exceeds the app input limit");
+        }
+        return app.runner.run(moduleInput);
+      },
+      sha3_256: (bytes) => app.sha3.sha3_256(bytes),
+    });
+
+    if (workflow.status === "not-found") {
+      setOutput(controls.lookupStatus, "Not found");
+      throw new Error(`No ${workflow.lookupKind} record was found in Kayros`);
+    }
+    if (workflow.status === "ambiguous") {
+      setOutput(controls.lookupStatus, `Ambiguous (${workflow.count} records)`);
+      throw new Error(
+        `The data item matches ${workflow.count} Kayros records. Search by a record hash instead.`,
+      );
+    }
+
+    const { record, output } = workflow;
+    setOutput(controls.lookupStatus, "Found");
+    setOutput(controls.recordDataType, record.dataType);
+    setOutput(controls.recordDataItem, record.dataItem);
+    setOutput(controls.previousHash, record.prevHash ?? "00".repeat(32));
+    setOutput(controls.storedHash, record.hashItem);
+    setOutput(controls.localHash, output.computedHash);
+    setOutput(controls.hashType, record.hashType);
+    setBooleanOutput(controls.hashMatches, output.matches);
+    setOutput(controls.kayrosTimestamp, record.timestamp);
+    setOutput(controls.kayrosBlock, String(record.block));
+    if (!output.matches) {
+      throw new Error("Local verification failed: the calculated hash does not match Kayros");
+    }
+  } catch (error) {
+    showVerifyKayrosError(error);
+  } finally {
+    setVerifyKayrosBusy(controls, false);
+  }
+}
+
+function readVerifyKayrosLookup(controls: VerifyKayrosControls): VerifyKayrosLookup {
+  const recordHash = controls.recordHash.value.trim();
+  const dataItem = controls.dataItem.value.trim();
+  const lookup: VerifyKayrosLookup = {};
+  if (recordHash.length > 0) {
+    lookup.recordHash = recordHash;
+  }
+  if (dataItem.length > 0) {
+    lookup.dataItem = dataItem;
+  }
+  return lookup;
 }
 
 async function runPreview(loaded: LoadedApp, controls: ProveControls): Promise<void> {
@@ -227,7 +408,10 @@ function readInput(controls: ProveControls): ProveInclusionInput {
   return { a: controls.textA.value, b: controls.textB.value, n };
 }
 
-function applyUrlPrefill(controls: ProveControls): void {
+function applyUrlPrefill(
+  controls: ProveControls,
+  verifyControls: VerifyKayrosControls,
+): void {
   const fragment = window.location.hash.slice(1);
   if (fragment.length === 0) {
     return;
@@ -241,31 +425,40 @@ function applyUrlPrefill(controls: ProveControls): void {
     if (parameters.get("v") !== "1") {
       throw new Error("Unsupported Provable URL version");
     }
-    if (parameters.get("app") !== "prove-inclusion") {
+    const app = parameters.get("app");
+    if (app === "prove-inclusion") {
+      const a = parameters.get("a");
+      const b = parameters.get("b");
+      const n = parameters.get("n");
+      if (a === null && b === null && n === null) {
+        throw new Error("Provable URL contains no input values");
+      }
+      if (a !== null) {
+        controls.textA.value = a;
+      }
+      if (b !== null) {
+        controls.textB.value = b;
+      }
+      if (n !== null && n.length > 0) {
+        const threshold = Number(n);
+        if (!Number.isSafeInteger(threshold) || threshold < 0) {
+          throw new Error("URL parameter N must be a non-negative integer");
+        }
+        controls.threshold.value = String(threshold);
+      }
+    } else if (app === "verify-kayros") {
+      const recordHash = parameters.get("recordHash");
+      const dataItem = parameters.get("dataItem");
+      if (recordHash === null && dataItem === null) {
+        throw new Error("Provable URL contains no Verify Kayros lookup value");
+      }
+      verifyControls.recordHash.value = recordHash ?? "";
+      verifyControls.dataItem.value = dataItem ?? "";
+    } else {
       throw new Error("Unsupported Provable URL application");
     }
 
-    const a = parameters.get("a");
-    const b = parameters.get("b");
-    const n = parameters.get("n");
-    if (a === null && b === null && n === null) {
-      throw new Error("Provable URL contains no input values");
-    }
-    if (a !== null) {
-      controls.textA.value = a;
-    }
-    if (b !== null) {
-      controls.textB.value = b;
-    }
-    if (n !== null && n.length > 0) {
-      const threshold = Number(n);
-      if (!Number.isSafeInteger(threshold) || threshold < 0) {
-        throw new Error("URL parameter N must be a non-negative integer");
-      }
-      controls.threshold.value = String(threshold);
-    }
-
-    viewSelector.value = "prove-inclusion";
+    viewSelector.value = app;
     showSelectedView();
     urlImportStatus.textContent = "Inputs loaded from the URL and removed from the address bar. Review them before running.";
     urlImportStatus.hidden = false;
@@ -393,10 +586,20 @@ function resetResult(controls: ProveControls): void {
   clearError();
 }
 
+function resetVerifyKayrosResult(controls: VerifyKayrosControls): void {
+  for (const output of verifyKayrosOutputs(controls)) {
+    setOutput(output, "—");
+    delete output.dataset.value;
+  }
+  clearVerifyKayrosError();
+}
+
 function showSelectedView(): void {
   const showCore = viewSelector.value === "core";
+  const showProveInclusion = viewSelector.value === "prove-inclusion";
   coreView.hidden = !showCore;
-  proveInclusionView.hidden = showCore;
+  proveInclusionView.hidden = !showProveInclusion;
+  verifyKayrosView.hidden = viewSelector.value !== "verify-kayros";
   if (showCore && loadedApp) {
     void refreshLatestKayros();
   }
@@ -405,6 +608,11 @@ function showSelectedView(): void {
 function setBusy(controls: ProveControls, busy: boolean): void {
   controls.runButton.disabled = busy;
   controls.runButton.textContent = busy ? "Verifying A…" : "Verify A and count B";
+}
+
+function setVerifyKayrosBusy(controls: VerifyKayrosControls, busy: boolean): void {
+  controls.runButton.disabled = busy;
+  controls.runButton.textContent = busy ? "Verifying record…" : "Search and verify locally";
 }
 
 function setOutput(output: HTMLOutputElement, value: string): void {
@@ -419,9 +627,13 @@ function setBooleanOutput(output: HTMLOutputElement, value: boolean): void {
 
 function showLoadError(error: unknown): void {
   appContent.ariaBusy = "false";
+  verifyKayrosContent.ariaBusy = "false";
   moduleStatus.textContent = "Integrity verification failed";
   moduleStatus.dataset.status = "invalid";
+  verifyKayrosModuleStatus.textContent = "Integrity verification failed";
+  verifyKayrosModuleStatus.dataset.status = "invalid";
   showError(error);
+  showVerifyKayrosError(error);
 }
 
 function showError(error: unknown): void {
@@ -432,6 +644,31 @@ function showError(error: unknown): void {
 function clearError(): void {
   errorMessage.textContent = "";
   errorMessage.hidden = true;
+}
+
+function showVerifyKayrosError(error: unknown): void {
+  verifyKayrosError.textContent = formatError(error);
+  verifyKayrosError.hidden = false;
+}
+
+function clearVerifyKayrosError(): void {
+  verifyKayrosError.textContent = "";
+  verifyKayrosError.hidden = true;
+}
+
+function verifyKayrosOutputs(controls: VerifyKayrosControls): HTMLOutputElement[] {
+  return [
+    controls.lookupStatus,
+    controls.recordDataType,
+    controls.recordDataItem,
+    controls.previousHash,
+    controls.storedHash,
+    controls.localHash,
+    controls.hashType,
+    controls.hashMatches,
+    controls.kayrosTimestamp,
+    controls.kayrosBlock,
+  ];
 }
 
 function assertResponse(response: Response, label: string): void {

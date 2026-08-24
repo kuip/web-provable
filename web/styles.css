@@ -188,8 +188,7 @@ main {
 }
 
 .markdown-app,
-.core-card,
-.integrity-card {
+.core-card {
   padding: clamp(20px, 4vw, 34px);
 }
 
@@ -266,6 +265,9 @@ main {
 h1,
 h2,
 h3,
+h4,
+h5,
+h6,
 p,
 dl,
 dd {
@@ -282,13 +284,24 @@ h3 {
   font-size: 0.98rem;
 }
 
-.markdown-app > form > h1 {
+h4 {
+  margin: 20px 0 8px;
+  font-size: 0.92rem;
+}
+
+h5,
+h6 {
+  margin: 18px 0 7px;
+  font-size: 0.86rem;
+}
+
+.markdown-tab-panel > h1 {
   margin: 0 0 8px;
   font-size: clamp(1.55rem, 4vw, 2.1rem);
   letter-spacing: -0.035em;
 }
 
-.markdown-app > form > p,
+.markdown-tab-panel > p,
 .field-status,
 .status,
 .loading-message,
@@ -296,9 +309,98 @@ h3 {
   color: var(--muted);
 }
 
-.markdown-app > form > p {
+.markdown-tab-panel > p {
   max-width: 760px;
   line-height: 1.6;
+}
+
+.markdown-tabs-sticky {
+  position: sticky;
+  z-index: 11;
+  top: var(--provable-shell-header-height, 70px);
+  padding: 9px 0 11px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.markdown-tab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.markdown-tab {
+  width: auto;
+  flex: 1 1 160px;
+  margin: 0;
+  padding: 10px 14px;
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.markdown-tab:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.markdown-tab[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.markdown-tab.documentation-tab {
+  flex: 0 0 46px;
+  padding-inline: 10px;
+  font-size: 1.12rem;
+}
+
+.documentation-tab-icon {
+  display: block;
+  line-height: 1;
+}
+
+.markdown-tab-panel {
+  padding-top: 22px;
+  scroll-margin-top: 220px;
+}
+
+.documentation-navigation {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.documentation-navigation-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 8px;
+}
+
+.documentation-navigation-field {
+  min-width: 0;
+}
+
+.documentation-navigation-field select {
+  padding: 8px 28px 8px 9px;
+  background: var(--surface-soft);
+  font-size: 0.78rem;
+}
+
+.documentation-panel > p {
+  color: var(--muted);
+  line-height: 1.68;
+}
+
+.documentation-heading {
+  scroll-margin-top: 240px;
 }
 
 .inline-code {
@@ -466,6 +568,9 @@ output[data-value="false"] {
 }
 
 .integrity-card {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
   box-shadow: none;
 }
 

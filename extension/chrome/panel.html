@@ -7,13 +7,14 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <header class="app-header">
+    <header id="shell-header" class="app-header">
       <img src="icons/logo.png" alt="" width="34" height="34">
       <span class="brand">Provable</span>
       <label class="visually-hidden" for="view-selector">Application</label>
       <select id="view-selector" aria-label="Application">
         <option value="core">Core</option>
         <option value="prove-inclusion" selected>Prove Inclusion</option>
+        <option value="verify-kayros">Verify Kayros</option>
       </select>
     </header>
 
@@ -63,7 +64,7 @@
 
         <p id="error-message" class="error" role="alert" hidden></p>
 
-        <section class="integrity-card" aria-labelledby="integrity-heading">
+        <section id="code-integrity" class="integrity-card" aria-labelledby="integrity-heading" hidden>
           <div>
             <h2 id="integrity-heading">Code integrity</h2>
             <p id="module-status" class="status" aria-live="polite">Loading packaged resources…</p>
@@ -82,6 +83,38 @@
               <div>
                 <dt>Core WasmX · SHA3-256</dt>
                 <dd><code id="core-module-digest">Pending</code></dd>
+              </div>
+            </dl>
+          </details>
+        </section>
+      </section>
+
+      <section id="verify-kayros-view" class="view app-view" hidden>
+        <div id="verify-kayros-content" class="markdown-app" aria-busy="true">
+          <p class="loading-message">Loading the verified Verify Kayros UI template…</p>
+        </div>
+
+        <p id="verify-kayros-error" class="error" role="alert" hidden></p>
+
+        <section id="verify-kayros-integrity" class="integrity-card" aria-labelledby="verify-kayros-integrity-heading" hidden>
+          <div>
+            <h2 id="verify-kayros-integrity-heading">Code integrity</h2>
+            <p id="verify-kayros-module-status" class="status" aria-live="polite">Loading packaged resources…</p>
+          </div>
+          <details>
+            <summary>Resource digests</summary>
+            <dl class="digest-list">
+              <div>
+                <dt>WasmX module</dt>
+                <dd><code id="verify-kayros-module-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>UI template</dt>
+                <dd><code id="verify-kayros-ui-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>Core WasmX · SHA3-256</dt>
+                <dd><code id="verify-kayros-core-digest">Pending</code></dd>
               </div>
             </dl>
           </details>

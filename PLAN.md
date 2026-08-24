@@ -6,13 +6,15 @@
 
 - npm and Cargo workspaces with pinned JavaScript and Rust lockfiles.
 - `apps/core/` shared contracts, canonical SHA-256 helpers, packaged SHA3-256 WasmX, Kayros SDK adapter, browser WasmX host, and Rust ABI crate.
-- Shared browser resource loader, controlled Markdown form renderer, and notarization-first Prove Inclusion workflow used by every browser adapter.
+- Dedicated terminable WasmX workers shared by Chrome and web, with immediate pre-instantiation re-hashing, manifest-committed input/output schemas, structured errors, cancellation, module/input/output/time limits, and a 4 MiB declared-memory ceiling.
+- Shared browser resource loader, controlled tabbed Markdown form renderer, pinned platform header, icon-only documentation tab with sticky midpoint-aware navigation and end-of-guide integrity details, and notarization-first Prove Inclusion workflow used by every browser adapter.
 - Prove Inclusion reference implementation and Rust/WasmX module consuming both core libraries.
+- Verify Kayros record lookup plus a zero-import WasmX module that locally reproduces and checks Kayros chained `sha3_256` record hashes.
 - Chrome Manifest V3 side-panel adapter and a static `web/` adapter for GitHub Pages.
 - Reproducible Chrome and web builds with assembled-artifact checks for CSP, local resources, digests, ABI exports, zero-import WasmX modules, and secret-free web configuration.
 - GitHub Actions CI plus a dedicated Pages workflow that builds, verifies, and deploys `dist/web/` from `main`.
 
-The current Chrome and web apps compute an integrity-checked preview, query Kayros `s32_hashes` for `data_type: provable_sdk`, and run the inclusion computation only after a matching notarization is found. Execution-record notarization, worker termination, full resource limits, Drive archival, and Safari remain milestone work below.
+The current Chrome and web targets package Prove Inclusion and Verify Kayros. They can gate inclusion on an exact `s32_hashes` match and independently recompute a retrieved Kayros chained record hash with local zero-import WasmX. App execution is isolated from the UI in terminable workers with enforced wire schemas plus byte, time, and memory limits. Execution-record notarization, trusted-root Merkle verification, publisher trust and caching, Drive archival, and Safari remain milestone work below.
 
 ## 1. Goal
 
@@ -51,7 +53,7 @@ The implementation should maximize shared behavior across GitHub Pages, Chrome, 
 | WASM-01 | Download, cache, and run WasmX apps | An allowed app source resolves to immutable bytes, verifies successfully, is cached by digest, and executes through the versioned host ABI. |
 | INT-01 | Verify that all executed code is unchanged | Every execution records the app manifest and module digests; a digest/signature mismatch blocks execution before instantiation. |
 | UI-01 | Markdown with fields | Sanitized Markdown renders declared editable inputs and read-only outputs without allowing raw script execution. |
-| UI-02 | Derived fields | Valid input changes recompute outputs predictably; invalid or incomplete inputs show field-level errors and never create a record. |
+| UI-02 | Derived fields | Valid input changes recompute outputs predictably; invalid or incomplete inputs show field-level errors and create neither a diagnostic record nor an execution record. |
 | NET-01 | Internet requests | An app can request only declared origins through a permission broker, with explicit user consent and recorded request/response digests. |
 | KAY-01 | Log an entry and get a proof | A canonical execution record can be submitted to Kayros, and the returned proof is verified before being shown as valid. |
 | DRV-01 | Save proofs to Google Drive | An authenticated user can save, list, retrieve, and byte-compare a proof archive in Drive. |
@@ -149,7 +151,7 @@ GitHub Pages / Chrome side panel / approved Safari panel
 
 - **Application UI:** navigation, Markdown rendering, form state, run status, provenance details, proof history, Drive connection, and accessible error handling.
 - **Core app:** shared TypeScript contracts and services plus the common Rust/WasmX ABI crate. All other apps depend on core rather than copying host, hashing, serialization, or Kayros logic.
-- **Execution orchestrator:** validates inputs, resolves an exact app version, obtains grants, invokes the runtime, validates outputs, constructs a canonical execution record, and coordinates notarization/backup.
+- **Execution orchestrator:** validates inputs, resolves an exact app version, obtains grants, records explicit pre-execution failures as local diagnostics, invokes the runtime, validates outputs, constructs a canonical execution record, and coordinates notarization/backup.
 - **App resolver:** validates app manifests, verifies signatures and digests, maintains a content-addressed cache, and handles offline resolution.
 - **Runtime host:** runs one module per isolated worker or companion session and implements only the versioned WasmX ABI.
 - **Capability broker:** owns fetch, Kayros, clock, randomness, and any future external capability. Modules receive no ambient browser privileges.
@@ -160,7 +162,7 @@ GitHub Pages / Chrome side panel / approved Safari panel
 
 - Keep the panel focused on presentation and short-lived orchestration.
 - Use the Manifest V3 service worker for browser events, privileged fetches, and resumable job coordination; never assume it stays alive.
-- Use IndexedDB for module bytes, execution records, and retry queues. Use extension local storage only for small preferences and grants.
+- Use IndexedDB for module bytes, local diagnostic records, execution records, and retry queues. Use extension local storage only for small preferences and grants.
 - Run browser-hosted modules in dedicated Web Workers so computation cannot block the panel and can be terminated on timeout.
 - Keep Safari native messaging optional behind the same executor/identity interfaces.
 
@@ -182,6 +184,13 @@ apps/
     fixtures/
     tests/
     wasmx/              # app module using apps/core/wasmx
+  verify-kayros/
+    app.config.json
+    package.json
+    ui.md
+    src/
+    tests/
+    wasmx/              # local Kayros record-hash verifier
 extension/
   chrome/             # MV3 manifest and Chrome adapter
   safari/             # Safari resources, adapter, containing app project
@@ -247,9 +256,14 @@ Store builds perform the same checks against bundled modules. Extension-package 
 - Treat network responses, time, and randomness as explicit execution inputs and commit their exact bytes or values to the record. A response digest proves which bytes were used; it does not independently prove that the remote origin authored those bytes.
 - Apply a strict extension CSP, sanitize Markdown, disallow inline/evaluated script, and never inject app-provided HTML directly.
 
-### 5.4 Canonical execution record
+### 5.4 Diagnostic and execution records
 
-Define a versioned JSON model and a single canonical serialization, with fixtures shared by TypeScript and Wasm tests. It should include:
+Define two distinct versioned JSON models so a failed pre-check can remain auditable without being mistaken for a computation or proof:
+
+- `DiagnosticRecordV1` is created only after the user explicitly starts a syntactically valid attempt that is rejected before WasmX invocation, including a missing or invalid Kayros source notarization. It contains an attempt ID, app/build identities, privacy-policy-approved input digests, failed stage, structured error, and host timestamps. It stays local, is unsigned, is never submitted to Kayros or Drive as proof, and must be labeled “diagnostic,” never “executed” or “proved.” Ordinary incomplete or invalid form edits create no record.
+- `ExecutionRecordV1` is created for every WasmX invocation, whether it succeeds, fails, or is cancelled. Only a successfully completed record with a locally verified source notarization and schema-valid output is eligible for Kayros notarization or proof archival. Failed and cancelled execution records stay local and cannot enter a notarizing or proved state.
+
+Give both models a single canonical serialization and shared TypeScript/Wasm fixtures. `ExecutionRecordV1` should include:
 
 - Unique execution ID and record schema version.
 - App ID/version, publisher, manifest/module/UI digests, ABI version, and runtime build digest.
@@ -261,7 +275,7 @@ Define a versioned JSON model and a single canonical serialization, with fixture
 - Digest of the complete pre-notarization record.
 - Kayros environment, returned receipt/proof, verifier version/digest, and verification status.
 
-Never label a record “proved” merely because upload succeeded. Only a locally verified Kayros proof can move it to that state.
+Never label a record “proved” merely because upload succeeded. Only an eligible `ExecutionRecordV1` with a locally verified Kayros proof can move to that state. A `DiagnosticRecordV1`, failed execution, or cancelled execution can never do so.
 
 ### 5.5 Drive archive
 
@@ -280,7 +294,7 @@ Never label a record “proved” merely because upload succeeded. Only a locall
 1. **Apps:** installed/available apps with version, publisher, verification status, and offline availability.
 2. **App view:** sanitized Markdown, inputs, derived read-only fields, run/record action, and inline validation.
 3. **Execution details:** exact code identities, capability inputs, source-proof result, Kayros status, and Drive status.
-4. **History:** searchable local records with verify, retry, export, and save-to-Drive actions.
+4. **History:** searchable execution records plus clearly separated local diagnostics; proof actions are available only for eligible execution records.
 5. **Settings:** Kayros environment, trusted publishers, Drive connection, cache management, privacy defaults, and diagnostic export.
 
 ### 6.2 UI rules
@@ -325,12 +339,12 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 1. Validate A, B, and N.
 2. Compute FIPS SHA3-256 over the UTF-8 bytes of A with the packaged Core WasmX module.
 3. Look up that digest in Kayros table `s32_hashes` with `data_type: provable_sdk`.
-4. If no matching notarization exists, show the failed lookup and do not run the inclusion computation.
+4. If no matching notarization exists or its proof is invalid, create a local `DiagnosticRecordV1`, show the failed lookup, and stop. Do not invoke the inclusion module, create an `ExecutionRecordV1`, submit anything to Kayros, or archive anything to Drive.
 5. Show the matching notarization timestamp and level-0 block/position.
-6. Execute the verified Prove Inclusion module to obtain C and result.
-7. Construct an execution record that commits to A, B, N, C, result, Kayros record metadata, and all code digests. Apply the approved plaintext/redaction policy.
-8. Submit the record digest or canonical record to Kayros according to its contract.
-9. Verify the returned proof locally, persist the complete archive, and optionally save it to Drive.
+6. Invoke the verified Prove Inclusion module. Every invocation produces a local `ExecutionRecordV1`; a failure or cancellation ends the flow and leaves that record permanently ineligible for notarization.
+7. On success, complete the execution record with A, B, N, C, result, Kayros source metadata, and all code digests. Apply the approved plaintext/redaction policy and validate the output schema.
+8. Submit only the digest or canonical form of an eligible execution record to Kayros according to its contract.
+9. Verify the returned proof locally, persist the complete proof archive, and optionally save it to Drive.
 
 ## 8. Implementation milestones
 
@@ -338,7 +352,7 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 
 - Complete the four ADR gates in section 3.
 - Add a concise threat model covering registry compromise, publisher-key compromise, network tampering, cache mutation, malicious modules/Markdown, proof forgery, token theft, replay, and data leakage.
-- Freeze v1 schemas for app manifests, ABI messages, execution records, and Drive archives.
+- Freeze v1 schemas for app manifests, ABI messages, diagnostic records, execution records, and Drive archives.
 - Create valid, invalid, tampered, oversized, and runaway fixtures.
 
 **Exit:** all gates have working fixtures and an approved decision; no unresolved issue can invalidate the chosen runtime or distribution model.
@@ -367,9 +381,10 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 ### Milestone 3 — App supply chain, cache, and runtime
 
 - Implement manifest validation, trust store, signatures, digest graph, immutable resolver, content-addressed IndexedDB cache, and provenance UI.
-- Implement the `provable:app/1` worker/companion protocol and a generated TypeScript/module conformance suite.
-- Enforce import allowlists, input/output schemas, size/memory/time limits, cancellation, and structured errors.
-- Emit an unsigned local execution record for every completed or failed run.
+- Implement the `provable:app/1` worker/companion protocol and a generated TypeScript/module conformance suite. **Worker protocol and first-party conformance fixtures implemented; generated third-party suite remains.**
+- Enforce import allowlists, input/output schemas, size/memory/time limits, cancellation, and structured errors. **Implemented for the current zero-import browser ABI and first-party apps.**
+- Emit a local `DiagnosticRecordV1` for every explicit, syntactically valid attempt rejected before invocation, and an unsigned local `ExecutionRecordV1` for every successful, failed, or cancelled WasmX invocation.
+- Enforce record-state eligibility so only successful, source-verified, schema-valid execution records can be notarized or archived as proofs.
 
 **Exit:** valid online/offline fixtures run; any one-byte manifest/module/UI mutation is blocked; runaway and oversized modules terminate safely.
 
@@ -380,7 +395,7 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 - Render A, B, optional N, content hash, Kayros match/timestamp/block, C, and result in `ui.md`.
 - Use a fake Kayros verifier initially to exercise valid, invalid, and mismatched source proofs.
 
-**Exit:** the app matches the frozen semantics for every fixture and does not count or record when A has no matching Kayros notarization.
+**Exit:** the app matches the frozen semantics for every fixture. When A has no matching valid Kayros notarization, it does not count or create an `ExecutionRecordV1`; it creates only a clearly labeled, local, non-notarizable `DiagnosticRecordV1`.
 
 ### Milestone 5 — Network capability broker
 
@@ -449,7 +464,7 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 - System theme changes while the panel is open.
 - Install/run/remove/update Prove Inclusion under each permitted build profile.
 - One-byte module tampering is detected before execution.
-- A missing or failed Kayros lookup prevents the inclusion count from running.
+- A missing or failed Kayros lookup prevents the inclusion count from running, creates only a local diagnostic, and exposes no notarize or Drive-proof action.
 - Valid source proof → computation → Kayros proof → local verification → Drive archive → restore and reverify.
 - Revoked origin/Drive permission and offline recovery are understandable and non-destructive.
 - Keyboard-only and screen-reader smoke tests in both themes and browsers.

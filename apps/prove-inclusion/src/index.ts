@@ -54,6 +54,25 @@ export const PROVE_INCLUSION_APP: AppSourceManifest = {
     { id: "count", label: "Occurrences of B in A", type: "integer", role: "output", readOnly: true },
     { id: "result", label: "N < C", type: "boolean", role: "output", readOnly: true },
   ],
+  inputSchema: {
+    type: "object",
+    properties: {
+      a: { type: "string" },
+      b: { type: "string", minLength: 1 },
+      n: { type: "integer", minimum: 0 },
+    },
+    required: ["a", "b"],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      count: { type: "integer", minimum: 0 },
+      result: { type: "boolean" },
+    },
+    required: ["count", "result"],
+    additionalProperties: false,
+  },
   capabilities: {
     kayros: true,
     drive: true,

@@ -2,6 +2,7 @@ export * from "./browser-ui";
 export * from "./browser-runtime";
 export * from "./contracts";
 export * from "./integrity";
+export * from "./json-schema";
 export * from "./kayros";
 export * from "./markdown";
 export * from "./wasmx";

@@ -4,15 +4,26 @@ export type MarkdownInline =
   | { kind: "code"; value: string }
   | { kind: "field"; id: string };
 
+export type MarkdownHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
 export type MarkdownBlock =
-  | { kind: "heading"; level: 1 | 2 | 3; children: MarkdownInline[] }
+  | { kind: "heading"; level: MarkdownHeadingLevel; children: MarkdownInline[] }
   | { kind: "paragraph"; children: MarkdownInline[] }
   | { kind: "field"; id: string }
-  | { kind: "action"; id: string };
+  | { kind: "action"; id: string }
+  | { kind: "tab-separator" };
+
+export type MarkdownContentBlock = Exclude<MarkdownBlock, { kind: "tab-separator" }>;
+
+export interface MarkdownTab {
+  blocks: MarkdownContentBlock[];
+  title: string;
+}
 
 const standaloneField = /^\{\{field:([A-Za-z][A-Za-z0-9_-]*)\}\}$/;
 const standaloneAction = /^\{\{action:([A-Za-z][A-Za-z0-9_-]*)\}\}$/;
 const inlineToken = /\{\{field:([A-Za-z][A-Za-z0-9_-]*)\}\}|\*\*([^*\n]+)\*\*|`([^`\n]+)`/g;
+const tabSeparator = /^-{6,}$/;
 
 /**
  * Parses the inert Markdown subset used by app UI templates.
@@ -42,6 +53,12 @@ export function parseMarkdownTemplate(source: string): MarkdownBlock[] {
       continue;
     }
 
+    if (tabSeparator.test(line)) {
+      flushParagraph();
+      blocks.push({ kind: "tab-separator" });
+      continue;
+    }
+
     const field = standaloneField.exec(line);
     if (field?.[1]) {
       flushParagraph();
@@ -56,12 +73,12 @@ export function parseMarkdownTemplate(source: string): MarkdownBlock[] {
       continue;
     }
 
-    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
     if (heading?.[1] && heading[2]) {
       flushParagraph();
       blocks.push({
         kind: "heading",
-        level: heading[1].length as 1 | 2 | 3,
+        level: heading[1].length as MarkdownHeadingLevel,
         children: parseInline(heading[2]),
       });
       continue;
@@ -72,6 +89,50 @@ export function parseMarkdownTemplate(source: string): MarkdownBlock[] {
 
   flushParagraph();
   return blocks;
+}
+
+/** Splits a UI template into titled tabs using lines of six or more hyphens. */
+export function parseMarkdownTabs(source: string): MarkdownTab[] {
+  const tabs: MarkdownContentBlock[][] = [[]];
+  for (const block of parseMarkdownTemplate(source)) {
+    if (block.kind === "tab-separator") {
+      const current = tabs.at(-1);
+      if (!current || current.length === 0) {
+        throw new Error("UI tab separators cannot create an empty tab");
+      }
+      tabs.push([]);
+      continue;
+    }
+    tabs.at(-1)?.push(block);
+  }
+
+  if (tabs.length < 2) {
+    throw new Error("UI template must define tabs with a line of six or more hyphens");
+  }
+  if (tabs.some((blocks) => blocks.length === 0)) {
+    throw new Error("UI tab separators cannot create an empty tab");
+  }
+
+  return tabs.map((blocks) => {
+    const titleBlock = blocks[0];
+    if (titleBlock?.kind !== "heading" || titleBlock.level !== 1) {
+      throw new Error("Every UI tab must start with a level-one heading");
+    }
+    const title = inlineText(titleBlock.children);
+    if (title.length === 0) {
+      throw new Error("Every UI tab must have a title");
+    }
+    return { blocks, title };
+  });
+}
+
+function inlineText(children: MarkdownInline[]): string {
+  return children.map((child) => {
+    if (child.kind === "field") {
+      throw new Error("UI tab titles cannot contain fields");
+    }
+    return child.value;
+  }).join("").trim();
 }
 
 function parseInline(value: string): MarkdownInline[] {

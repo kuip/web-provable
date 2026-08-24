@@ -6,7 +6,7 @@
     <meta name="referrer" content="no-referrer">
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://kayros.provable.dev; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://kayros.provable.dev; object-src 'none'; base-uri 'self'; form-action 'self'"
     >
     <meta name="description" content="Verify Kayros-notarized content and run integrity-checked WasmX applications in your browser.">
     <meta property="og:type" content="website">
@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <header class="site-header">
+    <header id="shell-header" class="site-header">
       <div class="header-inner">
         <a class="brand" href="./" aria-label="Provable home">
           <img src="./icons/logo.png" alt="" width="38" height="38">
@@ -32,6 +32,7 @@
           <select id="view-selector" aria-label="Application">
             <option value="core">Core</option>
             <option value="prove-inclusion" selected>Prove Inclusion</option>
+            <option value="verify-kayros">Verify Kayros</option>
           </select>
           <a class="source-link" href="https://github.com/kuip/web-provable" target="_blank" rel="noopener noreferrer">Source</a>
         </div>
@@ -102,7 +103,7 @@
 
         <p id="error-message" class="error surface-message" role="alert" hidden></p>
 
-        <section class="surface integrity-card" aria-labelledby="integrity-heading">
+        <section id="code-integrity" class="integrity-card" aria-labelledby="integrity-heading" hidden>
           <div class="section-heading-row">
             <div>
               <p class="eyebrow">Packaged resources</p>
@@ -124,6 +125,41 @@
               <div>
                 <dt>Core WasmX · SHA3-256</dt>
                 <dd><code id="core-module-digest">Pending</code></dd>
+              </div>
+            </dl>
+          </details>
+        </section>
+      </section>
+
+      <section id="verify-kayros-view" class="view app-view" hidden>
+        <div id="verify-kayros-content" class="surface markdown-app" aria-busy="true">
+          <p class="loading-message">Loading the verified Verify Kayros UI template…</p>
+        </div>
+
+        <p id="verify-kayros-error" class="error surface-message" role="alert" hidden></p>
+
+        <section id="verify-kayros-integrity" class="integrity-card" aria-labelledby="verify-kayros-integrity-heading" hidden>
+          <div class="section-heading-row">
+            <div>
+              <p class="eyebrow">Packaged resources</p>
+              <h2 id="verify-kayros-integrity-heading">Code integrity</h2>
+            </div>
+            <p id="verify-kayros-module-status" class="status" aria-live="polite">Loading packaged resources…</p>
+          </div>
+          <details>
+            <summary>Resource digests</summary>
+            <dl class="digest-list">
+              <div>
+                <dt>WasmX module</dt>
+                <dd><code id="verify-kayros-module-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>UI template</dt>
+                <dd><code id="verify-kayros-ui-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>Core WasmX · SHA3-256</dt>
+                <dd><code id="verify-kayros-core-digest">Pending</code></dd>
               </div>
             </dl>
           </details>

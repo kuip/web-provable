@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "verify-kayros",
+  "kind": "app",
+  "version": "0.1.0",
+  "coreVersion": "^0.1.0",
+  "title": "Verify Kayros",
+  "description": "Find a Kayros record and locally recompute its stored record hash.",
+  "abi": "provable:app/1",
+  "module": {
+    "path": "app.wasm"
+  },
+  "ui": {
+    "path": "ui.md"
+  },
+  "fields": [
+    { "id": "recordHash", "label": "Kayros record hash", "type": "text", "role": "input", "required": false },
+    { "id": "dataItem", "label": "Data item", "type": "text", "role": "input", "required": false },
+    { "id": "lookupStatus", "label": "Record lookup", "type": "text", "role": "output", "readOnly": true },
+    { "id": "recordDataType", "label": "Data type", "type": "text", "role": "output", "readOnly": true },
+    { "id": "recordDataItem", "label": "Record data item", "type": "text", "role": "output", "readOnly": true },
+    { "id": "previousHash", "label": "Previous record hash", "type": "text", "role": "output", "readOnly": true },
+    { "id": "storedHash", "label": "Hash stored by Kayros", "type": "text", "role": "output", "readOnly": true },
+    { "id": "localHash", "label": "Locally calculated hash", "type": "text", "role": "output", "readOnly": true },
+    { "id": "hashType", "label": "Hash algorithm", "type": "text", "role": "output", "readOnly": true },
+    { "id": "hashMatches", "label": "Local hash matches Kayros", "type": "boolean", "role": "output", "readOnly": true },
+    { "id": "kayrosTimestamp", "label": "Kayros timestamp", "type": "text", "role": "output", "readOnly": true },
+    { "id": "kayrosBlock", "label": "Kayros block / position", "type": "integer", "role": "output", "readOnly": true }
+  ],
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "previousHash": { "type": "string" },
+      "dataType": { "type": "string" },
+      "dataItem": { "type": "string" },
+      "timestampId": { "type": "string" },
+      "hashType": { "type": "string" },
+      "expectedHash": { "type": "string" }
+    },
+    "required": [
+      "previousHash",
+      "dataType",
+      "dataItem",
+      "timestampId",
+      "hashType",
+      "expectedHash"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "computedHash": { "type": "string" },
+      "matches": { "type": "boolean" },
+      "inputBytes": { "type": "integer", "minimum": 0 }
+    },
+    "required": ["computedHash", "matches", "inputBytes"],
+    "additionalProperties": false
+  },
+  "capabilities": {
+    "kayros": true,
+    "networkOrigins": ["https://kayros.provable.dev"]
+  },
+  "resourceLimits": {
+    "maxInputBytes": 16384,
+    "maxOutputBytes": 4096,
+    "timeoutMs": 5000,
+    "maxMemoryPages": 64
+  }
+}

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  findKayrosRecordByHash,
   findKayrosRecordBySha3,
+  findKayrosRecordsByDataItem,
   getLatestKayrosHash,
   kayrosHashToHex,
   kayrosTimeUuidToIso,
@@ -72,6 +74,60 @@ describe("Kayros hash encoding", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
       "data_item=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA%3D",
     );
+  });
+
+  it("loads a full record by its Kayros hash and preserves the previous hash", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      data_item: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      data_type: "provable_sdk",
+      hash_item: "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=",
+      hash_type: "sha3_256",
+      position: 7,
+      prev_hash: "ERERERERERERERERERERERERERERERERERERERERERE=",
+      ts: "7542ccba-8ff7-11f1-8000-fc7400000000",
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(findKayrosRecordByHash("22".repeat(32), {
+      apiKey: "test-key",
+      baseUrl: "https://kayros.example",
+    })).resolves.toMatchObject({
+      hashItem: "22".repeat(32),
+      prevHash: "11".repeat(32),
+      block: 7,
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/api/lightnet/database/record-by-hash?",
+    );
+  });
+
+  it("returns undefined when a Kayros record hash is absent", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 404 })));
+    await expect(findKayrosRecordByHash("22".repeat(32), {
+      apiKey: "test-key",
+      baseUrl: "https://kayros.example",
+    })).resolves.toBeUndefined();
+  });
+
+  it("returns every exact data-item match for ambiguity handling", async () => {
+    const row = {
+      data_item: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      data_type: "provable_sdk",
+      hash_item: "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=",
+      hash_type: "sha3_256",
+      position: 7,
+      prev_hash: "ERERERERERERERERERERERERERERERERERERERERERE=",
+      ts: "7542ccba-8ff7-11f1-8000-fc7400000000",
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      count: 2,
+      records: [row, { ...row, position: 8 }],
+    }), { status: 200 })));
+
+    await expect(findKayrosRecordsByDataItem("00".repeat(32), {
+      apiKey: "test-key",
+      baseUrl: "https://kayros.example",
+    })).resolves.toHaveLength(2);
   });
 
   it("decodes Kayros UUID v1 timestamps", () => {

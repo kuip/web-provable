@@ -8,10 +8,15 @@ import { build } from "esbuild";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const output = join(root, "dist/web");
 const webSource = join(root, "web");
-const appSource = join(root, "apps/prove-inclusion");
-const appWasmSource = join(
+const proveInclusionSource = join(root, "apps/prove-inclusion");
+const verifyKayrosSource = join(root, "apps/verify-kayros");
+const proveInclusionWasmSource = join(
   root,
   "target/wasm32-unknown-unknown/release/prove_inclusion_wasmx.wasm",
+);
+const verifyKayrosWasmSource = join(
+  root,
+  "target/wasm32-unknown-unknown/release/verify_kayros_wasmx.wasm",
 );
 const coreWasmSource = join(
   root,
@@ -24,6 +29,7 @@ await Promise.all([
   mkdir(join(output, "icons"), { recursive: true }),
   mkdir(join(output, "apps/core"), { recursive: true }),
   mkdir(join(output, "apps/prove-inclusion"), { recursive: true }),
+  mkdir(join(output, "apps/verify-kayros"), { recursive: true }),
 ]);
 
 await Promise.all([
@@ -36,38 +42,62 @@ await Promise.all([
     target: ["chrome114", "firefox115", "safari16.4"],
     sourcemap: false,
   }),
+  build({
+    entryPoints: [join(root, "apps/core/src/wasmx-worker.ts")],
+    outfile: join(output, "assets/wasmx-worker.js"),
+    bundle: true,
+    format: "esm",
+    platform: "browser",
+    target: ["chrome114", "firefox115", "safari16.4"],
+    sourcemap: false,
+  }),
   cp(join(webSource, "index.html"), join(output, "index.html")),
   cp(join(webSource, "index.html"), join(output, "404.html")),
   cp(join(webSource, "styles.css"), join(output, "styles.css")),
   cp(join(root, "static/image/logo.png"), join(output, "icons/logo.png")),
   cp(coreWasmSource, join(output, "apps/core/core.wasm")),
-  cp(join(appSource, "ui.md"), join(output, "apps/prove-inclusion/ui.md")),
-  cp(appWasmSource, join(output, "apps/prove-inclusion/app.wasm")),
+  cp(join(proveInclusionSource, "ui.md"), join(output, "apps/prove-inclusion/ui.md")),
+  cp(proveInclusionWasmSource, join(output, "apps/prove-inclusion/app.wasm")),
+  cp(join(verifyKayrosSource, "ui.md"), join(output, "apps/verify-kayros/ui.md")),
+  cp(verifyKayrosWasmSource, join(output, "apps/verify-kayros/app.wasm")),
   writeFile(join(output, ".nojekyll"), ""),
 ]);
 
-const [appWasmBytes, coreWasmBytes, uiBytes, appManifestText, coreManifestText] =
+const [
+  proveInclusionWasmBytes,
+  verifyKayrosWasmBytes,
+  coreWasmBytes,
+  proveInclusionUiBytes,
+  verifyKayrosUiBytes,
+  proveInclusionManifestText,
+  verifyKayrosManifestText,
+  coreManifestText,
+] =
   await Promise.all([
-    readFile(appWasmSource),
+    readFile(proveInclusionWasmSource),
+    readFile(verifyKayrosWasmSource),
     readFile(coreWasmSource),
-    readFile(join(appSource, "ui.md")),
-    readFile(join(appSource, "app.config.json"), "utf8"),
+    readFile(join(proveInclusionSource, "ui.md")),
+    readFile(join(verifyKayrosSource, "ui.md")),
+    readFile(join(proveInclusionSource, "app.config.json"), "utf8"),
+    readFile(join(verifyKayrosSource, "app.config.json"), "utf8"),
     readFile(join(root, "apps/core/app.json"), "utf8"),
   ]);
 
-const appManifest = JSON.parse(appManifestText);
-const appReleaseManifest = {
-  ...appManifest,
-  module: {
-    ...appManifest.module,
-    sha256: digest(appWasmBytes),
-  },
-  ui: {
-    ...appManifest.ui,
-    sha256: digest(uiBytes),
-  },
-};
-await writeJson(join(output, "apps/prove-inclusion/app.json"), appReleaseManifest);
+const proveInclusionRelease = releaseApp(
+  JSON.parse(proveInclusionManifestText),
+  proveInclusionWasmBytes,
+  proveInclusionUiBytes,
+);
+const verifyKayrosRelease = releaseApp(
+  JSON.parse(verifyKayrosManifestText),
+  verifyKayrosWasmBytes,
+  verifyKayrosUiBytes,
+);
+await Promise.all([
+  writeJson(join(output, "apps/prove-inclusion/app.json"), proveInclusionRelease),
+  writeJson(join(output, "apps/verify-kayros/app.json"), verifyKayrosRelease),
+]);
 
 const coreManifest = JSON.parse(coreManifestText);
 const coreReleaseManifest = {
@@ -92,11 +122,26 @@ const runtimeConfig = {
 await writeJson(join(output, "config.json"), runtimeConfig);
 
 console.log(`Built GitHub Pages site at ${output}`);
-console.log(`Prove Inclusion WasmX SHA-256: ${appReleaseManifest.module.sha256}`);
+console.log(`Prove Inclusion WasmX SHA-256: ${proveInclusionRelease.module.sha256}`);
+console.log(`Verify Kayros WasmX SHA-256: ${verifyKayrosRelease.module.sha256}`);
 console.log(`Core WasmX SHA-256: ${coreReleaseManifest.module.sha256}`);
 
 function digest(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function releaseApp(sourceManifest, wasmBytes, uiBytes) {
+  return {
+    ...sourceManifest,
+    module: {
+      ...sourceManifest.module,
+      sha256: digest(wasmBytes),
+    },
+    ui: {
+      ...sourceManifest.ui,
+      sha256: digest(uiBytes),
+    },
+  };
 }
 
 async function writeJson(path, value) {

@@ -8,15 +8,20 @@ import { build } from "esbuild";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const output = join(root, "dist/chrome");
 const chromeSource = join(root, "extension/chrome");
-const appSource = join(root, "apps/prove-inclusion");
+const proveInclusionSource = join(root, "apps/prove-inclusion");
+const verifyKayrosSource = join(root, "apps/verify-kayros");
 const profile = process.argv.find((argument) => argument.startsWith("--profile="))?.split("=")[1]
   ?? "development";
 if (profile !== "development" && profile !== "store") {
   throw new Error(`Unsupported Chrome build profile: ${profile}`);
 }
-const wasmSource = join(
+const proveInclusionWasmSource = join(
   root,
   "target/wasm32-unknown-unknown/release/prove_inclusion_wasmx.wasm",
+);
+const verifyKayrosWasmSource = join(
+  root,
+  "target/wasm32-unknown-unknown/release/verify_kayros_wasmx.wasm",
 );
 const coreWasmSource = join(
   root,
@@ -27,6 +32,7 @@ await rm(output, { recursive: true, force: true });
 await mkdir(join(output, "icons"), { recursive: true });
 await mkdir(join(output, "apps/core"), { recursive: true });
 await mkdir(join(output, "apps/prove-inclusion"), { recursive: true });
+await mkdir(join(output, "apps/verify-kayros"), { recursive: true });
 
 await Promise.all([
   build({
@@ -47,38 +53,65 @@ await Promise.all([
     target: "chrome114",
     sourcemap: false,
   }),
+  build({
+    entryPoints: [join(root, "apps/core/src/wasmx-worker.ts")],
+    outfile: join(output, "wasmx-worker.js"),
+    bundle: true,
+    format: "esm",
+    platform: "browser",
+    target: "chrome114",
+    sourcemap: false,
+  }),
   cp(join(chromeSource, "manifest.json"), join(output, "manifest.json")),
   cp(join(chromeSource, "panel.html"), join(output, "panel.html")),
   cp(join(chromeSource, "styles.css"), join(output, "styles.css")),
   cp(join(root, "static/image/logo.png"), join(output, "icons/logo.png")),
   cp(coreWasmSource, join(output, "apps/core/core.wasm")),
-  cp(join(appSource, "ui.md"), join(output, "apps/prove-inclusion/ui.md")),
-  cp(wasmSource, join(output, "apps/prove-inclusion/app.wasm")),
+  cp(join(proveInclusionSource, "ui.md"), join(output, "apps/prove-inclusion/ui.md")),
+  cp(proveInclusionWasmSource, join(output, "apps/prove-inclusion/app.wasm")),
+  cp(join(verifyKayrosSource, "ui.md"), join(output, "apps/verify-kayros/ui.md")),
+  cp(verifyKayrosWasmSource, join(output, "apps/verify-kayros/app.wasm")),
 ]);
 
-const [wasmBytes, coreWasmBytes, uiBytes, sourceManifestText, coreManifestText] = await Promise.all([
-  readFile(wasmSource),
+const [
+  proveInclusionWasmBytes,
+  verifyKayrosWasmBytes,
+  coreWasmBytes,
+  proveInclusionUiBytes,
+  verifyKayrosUiBytes,
+  proveInclusionManifestText,
+  verifyKayrosManifestText,
+  coreManifestText,
+] = await Promise.all([
+  readFile(proveInclusionWasmSource),
+  readFile(verifyKayrosWasmSource),
   readFile(coreWasmSource),
-  readFile(join(appSource, "ui.md")),
-  readFile(join(appSource, "app.config.json"), "utf8"),
+  readFile(join(proveInclusionSource, "ui.md")),
+  readFile(join(verifyKayrosSource, "ui.md")),
+  readFile(join(proveInclusionSource, "app.config.json"), "utf8"),
+  readFile(join(verifyKayrosSource, "app.config.json"), "utf8"),
   readFile(join(root, "apps/core/app.json"), "utf8"),
 ]);
-const sourceManifest = JSON.parse(sourceManifestText);
-const releaseManifest = {
-  ...sourceManifest,
-  module: {
-    ...sourceManifest.module,
-    sha256: digest(wasmBytes),
-  },
-  ui: {
-    ...sourceManifest.ui,
-    sha256: digest(uiBytes),
-  },
-};
-await writeFile(
-  join(output, "apps/prove-inclusion/app.json"),
-  `${JSON.stringify(releaseManifest, null, 2)}\n`,
+const proveInclusionRelease = releaseApp(
+  JSON.parse(proveInclusionManifestText),
+  proveInclusionWasmBytes,
+  proveInclusionUiBytes,
 );
+const verifyKayrosRelease = releaseApp(
+  JSON.parse(verifyKayrosManifestText),
+  verifyKayrosWasmBytes,
+  verifyKayrosUiBytes,
+);
+await Promise.all([
+  writeFile(
+    join(output, "apps/prove-inclusion/app.json"),
+    `${JSON.stringify(proveInclusionRelease, null, 2)}\n`,
+  ),
+  writeFile(
+    join(output, "apps/verify-kayros/app.json"),
+    `${JSON.stringify(verifyKayrosRelease, null, 2)}\n`,
+  ),
+]);
 
 const coreSourceManifest = JSON.parse(coreManifestText);
 const coreReleaseManifest = {
@@ -113,7 +146,8 @@ await writeFile(
 );
 
 console.log(`Built Chrome extension at ${output}`);
-console.log(`Prove Inclusion WasmX SHA-256: ${releaseManifest.module.sha256}`);
+console.log(`Prove Inclusion WasmX SHA-256: ${proveInclusionRelease.module.sha256}`);
+console.log(`Verify Kayros WasmX SHA-256: ${verifyKayrosRelease.module.sha256}`);
 console.log(`Core WasmX SHA-256: ${coreReleaseManifest.module.sha256}`);
 if (runtimeConfig.kayros.apiKey.length > 0) {
   console.log("Included the ignored local Kayros key in the development artifact only");
@@ -121,6 +155,20 @@ if (runtimeConfig.kayros.apiKey.length > 0) {
 
 function digest(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function releaseApp(sourceManifest, wasmBytes, uiBytes) {
+  return {
+    ...sourceManifest,
+    module: {
+      ...sourceManifest.module,
+      sha256: digest(wasmBytes),
+    },
+    ui: {
+      ...sourceManifest.ui,
+      sha256: digest(uiBytes),
+    },
+  };
 }
 
 async function readEnvironment(path) {

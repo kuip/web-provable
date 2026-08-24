@@ -1,0 +1,12 @@
+[package]
+name = "runaway-wasmx-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+provable-wasmx-core = { path = "../../../apps/core/wasmx" }
