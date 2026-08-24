@@ -120,7 +120,9 @@ main {
 }
 
 .core-settings,
-.latest-kayros {
+.drive-settings,
+.latest-kayros,
+.local-records {
   margin-top: 22px;
   padding: 16px;
   border: 1px solid var(--border);
@@ -129,8 +131,26 @@ main {
   text-align: left;
 }
 
-.core-settings h2 {
+.core-settings h2,
+.drive-settings h2,
+.local-records h2 {
   margin-top: 0;
+}
+
+.drive-account {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.drive-account span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.drive-account output {
+  overflow-wrap: anywhere;
+  font-weight: 700;
 }
 
 .settings-actions {
@@ -439,6 +459,31 @@ output[data-value="false"] {
   margin-top: 14px;
   color: var(--danger);
   font-weight: 650;
+}
+
+.record-notice {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.record-notice[data-status="verified"] {
+  color: var(--success);
+}
+
+.record-notice[data-status="invalid"] {
+  color: var(--danger);
+}
+
+.record-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .secondary-button {

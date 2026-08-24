@@ -36,17 +36,19 @@ describe("Verify Kayros workflow", () => {
       matches: true,
       inputBytes: 92,
     };
+    const run = vi.fn(async () => expected);
     const result = await runVerifyKayrosWorkflow(
       { recordHash: RECORD.hashItem },
       {
         findByRecordHash,
         findByDataItem: vi.fn(async () => []),
-        run: vi.fn(async () => expected),
+        run,
         sha3_256: () => RECORD.hashItem,
       },
     );
     expect(result).toEqual({ status: "verified", record: RECORD, output: expected });
     expect(findByRecordHash).toHaveBeenCalledWith(RECORD.hashItem);
+    expect(run).toHaveBeenCalledWith(toModuleInput(RECORD), RECORD);
   });
 
   it("does not silently choose an ambiguous data-item record", async () => {

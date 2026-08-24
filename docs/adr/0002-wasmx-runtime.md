@@ -43,5 +43,5 @@ The worker conformance fixture additionally proves that:
 - Common app logic has one TypeScript package and one Rust crate under `apps/core/`.
 - A module cannot directly access the DOM, extension APIs, storage, network, clock, or credentials.
 - App WasmX execution no longer blocks the panel or page thread. A terminated worker is recreated from the retained, packaged, immutable byte copy before the next invocation.
-- Execution and diagnostic records, publisher trust, and the immutable cache remain required before third-party modules are allowed.
+- Local execution and diagnostic records are implemented for the current first-party workflows; signed publisher trust and the immutable module cache remain required before third-party modules are allowed.
 - Dynamic, downloaded modules remain outside the store profile and require the separate sandbox decision recorded in ADR 0001.

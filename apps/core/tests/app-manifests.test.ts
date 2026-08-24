@@ -41,6 +41,11 @@ describe("app wire schemas", () => {
       schemaVersion: 1,
       id: "missing-schema",
       kind: "app",
+      publisher: "test:publisher",
+      version: "0.1.0",
+      coreVersion: "^0.1.0",
+      title: "Missing schema",
+      description: "Fixture without committed schemas",
       abi: "provable:app/1",
       module: { path: "app.wasm", sha256: digest },
       ui: { path: "ui.md", sha256: digest },
@@ -54,4 +59,55 @@ describe("app wire schemas", () => {
       },
     })).toThrow("App input schema");
   });
+
+  it("rejects unsupported manifest and nested fields", async () => {
+    const release = await fixtureRelease();
+
+    expect(() => assertAppReleaseManifest({ ...release, unexpected: true })).toThrow(
+      "unsupported field: unexpected",
+    );
+    expect(() => assertAppReleaseManifest({
+      ...release,
+      module: { ...release.module, url: "https://example.test/app.wasm" },
+    })).toThrow("unsupported field: url");
+    expect(() => assertAppReleaseManifest({
+      ...release,
+      resourceLimits: { ...release.resourceLimits, retries: 3 },
+    })).toThrow("unsupported field: retries");
+  });
+
+  it("validates field semantics and declared network origins", async () => {
+    const release = await fixtureRelease();
+    const firstField = release.fields[0];
+    expect(firstField).toBeDefined();
+    if (!firstField) {
+      return;
+    }
+
+    expect(() => assertAppReleaseManifest({
+      ...release,
+      fields: [{ ...firstField, readOnly: true }, ...release.fields.slice(1)],
+    })).toThrow("cannot be read-only");
+    expect(() => assertAppReleaseManifest({
+      ...release,
+      capabilities: { networkOrigins: ["https://example.test/path"] },
+    })).toThrow("invalid HTTPS origin");
+    expect(() => assertAppReleaseManifest({
+      ...release,
+      capabilities: { networkOrigins: ["https://example.test", "https://example.test"] },
+    })).toThrow("Duplicate app network origin");
+  });
 });
+
+async function fixtureRelease(): Promise<ReturnType<typeof makeRelease>> {
+  const config = JSON.parse(await readFile(manifests[0]!.url, "utf8")) as AppSourceManifest;
+  return makeRelease(config);
+}
+
+function makeRelease(config: AppSourceManifest) {
+  return {
+    ...config,
+    module: { ...config.module, sha256: digest },
+    ui: { ...config.ui, sha256: digest },
+  };
+}

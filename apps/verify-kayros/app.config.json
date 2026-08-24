@@ -3,6 +3,7 @@
   "id": "verify-kayros",
   "kind": "app",
   "version": "0.1.0",
+  "publisher": "github:kuip",
   "coreVersion": "^0.1.0",
   "title": "Verify Kayros",
   "description": "Find a Kayros record and locally recompute its stored record hash.",

@@ -7,6 +7,7 @@ describe("core integrity", () => {
     expect(canonicalJson({ z: 1, a: { y: true, b: null } })).toBe(
       '{"a":{"b":null,"y":true},"z":1}',
     );
+    expect(canonicalJson({ ä: 1, z: 2 })).toBe('{"z":2,"ä":1}');
   });
 
   it("computes a known SHA-256 vector", async () => {
@@ -15,4 +16,3 @@ describe("core integrity", () => {
     );
   });
 });
-

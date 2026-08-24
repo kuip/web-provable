@@ -30,7 +30,10 @@ export interface VerifyKayrosOutput {
 export interface VerifyKayrosWorkflowDependencies {
   findByRecordHash: (recordHash: string) => Promise<KayrosHashRecord | undefined>;
   findByDataItem: (dataItem: string) => Promise<KayrosHashRecord[]>;
-  run: (input: VerifyKayrosModuleInput) => Promise<VerifyKayrosOutput>;
+  run: (
+    input: VerifyKayrosModuleInput,
+    sourceRecord: KayrosHashRecord,
+  ) => Promise<VerifyKayrosOutput>;
   sha3_256: (bytes: Uint8Array) => string;
 }
 
@@ -44,6 +47,7 @@ export const VERIFY_KAYROS_APP: AppSourceManifest = {
   id: "verify-kayros",
   kind: "app",
   version: "0.1.0",
+  publisher: "github:kuip",
   coreVersion: "^0.1.0",
   title: "Verify Kayros",
   description: "Find a Kayros record and locally recompute its stored record hash.",
@@ -139,7 +143,7 @@ export async function runVerifyKayrosWorkflow(
   }
 
   const moduleInput = toModuleInput(record);
-  const output = await dependencies.run(moduleInput);
+  const output = await dependencies.run(moduleInput, record);
   const payload = buildKayrosRecordHashInput(moduleInput);
   const referenceHash = dependencies.sha3_256(payload);
   const referenceMatches = referenceHash === moduleInput.expectedHash;

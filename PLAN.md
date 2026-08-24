@@ -7,6 +7,8 @@
 - npm and Cargo workspaces with pinned JavaScript and Rust lockfiles.
 - `apps/core/` shared contracts, canonical SHA-256 helpers, packaged SHA3-256 WasmX, Kayros SDK adapter, browser WasmX host, and Rust ABI crate.
 - Dedicated terminable WasmX workers shared by Chrome and web, with immediate pre-instantiation re-hashing, manifest-committed input/output schemas, structured errors, cancellation, module/input/output/time limits, and a 4 MiB declared-memory ceiling.
+- Core-owned `DiagnosticRecordV1` and `ExecutionRecordV1` contracts with canonical digests, immutable IndexedDB persistence, shared browser history/status UI, exact app/build identities, and conservative proof-eligibility rules.
+- Closed v1 manifest validation, bundle-root and redirect enforcement, a pinned first-party publisher-claim policy, complete app/UI/Core digest graphs, immutable SHA-256-keyed IndexedDB promotion and read-back, plus provenance/cache UI in both browser targets.
 - Shared browser resource loader, controlled tabbed Markdown form renderer, pinned platform header, icon-only documentation tab with sticky midpoint-aware navigation and end-of-guide integrity details, and notarization-first Prove Inclusion workflow used by every browser adapter.
 - Prove Inclusion reference implementation and Rust/WasmX module consuming both core libraries.
 - Verify Kayros record lookup plus a zero-import WasmX module that locally reproduces and checks Kayros chained `sha3_256` record hashes.
@@ -14,7 +16,7 @@
 - Reproducible Chrome and web builds with assembled-artifact checks for CSP, local resources, digests, ABI exports, zero-import WasmX modules, and secret-free web configuration.
 - GitHub Actions CI plus a dedicated Pages workflow that builds, verifies, and deploys `dist/web/` from `main`.
 
-The current Chrome and web targets package Prove Inclusion and Verify Kayros. They can gate inclusion on an exact `s32_hashes` match and independently recompute a retrieved Kayros chained record hash with local zero-import WasmX. App execution is isolated from the UI in terminable workers with enforced wire schemas plus byte, time, and memory limits. Execution-record notarization, trusted-root Merkle verification, publisher trust and caching, Drive archival, and Safari remain milestone work below.
+The current Chrome and web targets package Prove Inclusion and Verify Kayros. They can gate inclusion on an exact `s32_hashes` match and independently recompute a retrieved Kayros chained record hash with local zero-import WasmX. App execution is isolated from the UI in terminable workers with enforced wire schemas plus byte, time, and memory limits. Explicit pre-execution failures and every app WasmX invocation now produce separate, unsigned local records. Current Kayros matches are not anchored to an independently trusted root and therefore remain clearly proof-ineligible. Execution-record notarization, trusted-root Merkle verification, cryptographic publisher signatures and offline manifest lookup, Drive archival, and Safari remain milestone work below.
 
 ## 1. Goal
 
@@ -246,6 +248,8 @@ Reject unknown required manifest fields, duplicate field IDs, mutable/unpinned p
 
 Store builds perform the same checks against bundled modules. Extension-package signing remains a platform trust layer; the internal digest graph makes the exact app/runtime closure visible in exported records.
 
+**Current bundled profile:** redirect-free resources below the artifact root are validated, hashed, promoted to immutable digest keys, read back, re-hashed, and then instantiated. The first-party publisher claim is pinned by the build profile and explicitly shown as bundle-authorized, with publisher signatures still marked not configured. No cached remotely downloaded executable is authorized in a store artifact, and offline manifest-to-digest resolution remains future work.
+
 ### 5.3 Execution and capability model
 
 - Pass canonical UTF-8 input bytes into the runtime and accept only size-limited, schema-valid output.
@@ -276,6 +280,8 @@ Give both models a single canonical serialization and shared TypeScript/Wasm fix
 - Kayros environment, returned receipt/proof, verifier version/digest, and verification status.
 
 Never label a record “proved” merely because upload succeeded. Only an eligible `ExecutionRecordV1` with a locally verified Kayros proof can move to that state. A `DiagnosticRecordV1`, failed execution, or cancelled execution can never do so.
+
+**Current implementation:** Core owns the closed v1 TypeScript contracts, canonical serialization and nested digests, immutable IndexedDB/fixture stores, source metadata, and shared browser record presentation. Prove Inclusion and Verify Kayros emit diagnostics only after valid explicit submissions and wrap each app WasmX invocation in an execution record. Exact database matches and local chain-hash matches are recorded but remain ineligible with `source-unanchored`. Request/response transcript digests, trusted-root proof material, signed publisher trust, notarization receipts, and archive state transitions remain later work. See `docs/adr/0003-local-records.md`.
 
 ### 5.5 Drive archive
 
@@ -380,11 +386,11 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 
 ### Milestone 3 — App supply chain, cache, and runtime
 
-- Implement manifest validation, trust store, signatures, digest graph, immutable resolver, content-addressed IndexedDB cache, and provenance UI.
+- Implement manifest validation, trust store, signatures, digest graph, immutable resolver, content-addressed IndexedDB cache, and provenance UI. **Closed manifest validation, bundle-scoped redirect-free resolution, pinned first-party publisher claims, digest closure, verified immutable cache promotion/read-back, and provenance UI implemented. Cryptographic publisher signatures, key rotation/revocation, and offline manifest lookup remain.**
 - Implement the `provable:app/1` worker/companion protocol and a generated TypeScript/module conformance suite. **Worker protocol and first-party conformance fixtures implemented; generated third-party suite remains.**
 - Enforce import allowlists, input/output schemas, size/memory/time limits, cancellation, and structured errors. **Implemented for the current zero-import browser ABI and first-party apps.**
-- Emit a local `DiagnosticRecordV1` for every explicit, syntactically valid attempt rejected before invocation, and an unsigned local `ExecutionRecordV1` for every successful, failed, or cancelled WasmX invocation.
-- Enforce record-state eligibility so only successful, source-verified, schema-valid execution records can be notarized or archived as proofs.
+- Emit a local `DiagnosticRecordV1` for every explicit, syntactically valid attempt rejected before invocation, and an unsigned local `ExecutionRecordV1` for every successful, failed, or cancelled WasmX invocation. **Implemented for the current Prove Inclusion and Verify Kayros browser workflows.**
+- Enforce record-state eligibility so only successful, source-verified, schema-valid execution records can be notarized or archived as proofs. **Implemented conservatively; current unanchored Kayros sources remain ineligible and no notarization/archive action exists yet.**
 
 **Exit:** valid online/offline fixtures run; any one-byte manifest/module/UI mutation is blocked; runaway and oversized modules terminate safely.
 
@@ -416,7 +422,7 @@ Put the counting algorithm in the WasmX module, not in UI code. Keep an independ
 
 ### Milestone 7 — Google Drive archive
 
-- Configure OAuth clients and platform-specific login flows without embedding client secrets.
+- Configure OAuth clients and platform-specific login flows without embedding client secrets. **Chrome's packaged Identity flow, narrow `drive.file` plus email scopes, non-interactive session restore, verified account email, disconnect, deployment client-ID configuration, and shared Core UI are implemented. The static web flow remains intentionally unavailable pending an explicit remote-GIS-versus-backend decision.**
 - Implement the approved visible-folder or app-data storage choice, archive upload/list/download, idempotent retry queue, conflict handling, disconnect, and local export.
 - Show exactly what will be uploaded and its plaintext/redaction status.
 

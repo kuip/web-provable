@@ -44,6 +44,19 @@
               </div>
             </form>
           </section>
+          <section class="drive-settings" aria-labelledby="google-drive-heading">
+            <h2 id="google-drive-heading">Google Drive</h2>
+            <p class="drive-account">
+              <span>Account</span>
+              <output id="google-drive-account" aria-live="polite">Loading…</output>
+            </p>
+            <p id="google-drive-status" class="field-status" aria-live="polite">Loading Google Drive settings…</p>
+            <p class="field-status">Requests your email and <code>drive.file</code> access. Provable can access only Drive files it creates or you explicitly select.</p>
+            <div class="settings-actions">
+              <button id="connect-google-drive" type="button" disabled>Connect Google Drive</button>
+              <button id="disconnect-google-drive" class="secondary-button" type="button" disabled>Disconnect</button>
+            </div>
+          </section>
           <section class="latest-kayros" aria-labelledby="latest-kayros-heading">
             <div class="section-heading-row">
               <h2 id="latest-kayros-heading">Latest Kayros hash</h2>
@@ -54,6 +67,14 @@
             <button id="refresh-kayros" class="secondary-button" type="button">Refresh latest hash</button>
             <p id="latest-kayros-error" class="error" role="alert" hidden></p>
           </section>
+          <section class="local-records" aria-labelledby="local-records-heading">
+            <h2 id="local-records-heading">Local records</h2>
+            <p id="local-record-count" class="field-status" aria-live="polite">Loading local records…</p>
+            <p class="field-status">Execution records retain canonical inputs and outputs locally; diagnostics retain only an input digest.</p>
+            <ol id="local-record-list" class="record-list">
+              <li>No local records yet.</li>
+            </ol>
+          </section>
         </div>
       </section>
 
@@ -62,16 +83,27 @@
           <p class="loading-message">Loading the verified UI template…</p>
         </div>
 
+        <p id="prove-record-status" class="record-notice" role="status" hidden></p>
         <p id="error-message" class="error" role="alert" hidden></p>
 
         <section id="code-integrity" class="integrity-card" aria-labelledby="integrity-heading" hidden>
           <div>
             <h2 id="integrity-heading">Code integrity</h2>
             <p id="module-status" class="status" aria-live="polite">Loading packaged resources…</p>
+            <p id="publisher-trust" class="field-status">Checking bundled publisher policy…</p>
+            <p id="resource-cache-status" class="field-status" aria-live="polite">Preparing verified local cache…</p>
           </div>
           <details>
-            <summary>Resource digests</summary>
+            <summary>Provenance and resource digests</summary>
             <dl class="digest-list">
+              <div>
+                <dt>Release manifest</dt>
+                <dd><code id="manifest-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>App + Core closure</dt>
+                <dd><code id="closure-digest">Pending</code></dd>
+              </div>
               <div>
                 <dt>WasmX module</dt>
                 <dd><code id="module-digest">Pending</code></dd>
@@ -94,16 +126,27 @@
           <p class="loading-message">Loading the verified Verify Kayros UI template…</p>
         </div>
 
+        <p id="verify-kayros-record-status" class="record-notice" role="status" hidden></p>
         <p id="verify-kayros-error" class="error" role="alert" hidden></p>
 
         <section id="verify-kayros-integrity" class="integrity-card" aria-labelledby="verify-kayros-integrity-heading" hidden>
           <div>
             <h2 id="verify-kayros-integrity-heading">Code integrity</h2>
             <p id="verify-kayros-module-status" class="status" aria-live="polite">Loading packaged resources…</p>
+            <p id="verify-kayros-publisher-trust" class="field-status">Checking bundled publisher policy…</p>
+            <p id="verify-kayros-resource-cache-status" class="field-status" aria-live="polite">Preparing verified local cache…</p>
           </div>
           <details>
-            <summary>Resource digests</summary>
+            <summary>Provenance and resource digests</summary>
             <dl class="digest-list">
+              <div>
+                <dt>Release manifest</dt>
+                <dd><code id="verify-kayros-manifest-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>App + Core closure</dt>
+                <dd><code id="verify-kayros-closure-digest">Pending</code></dd>
+              </div>
               <div>
                 <dt>WasmX module</dt>
                 <dd><code id="verify-kayros-module-digest">Pending</code></dd>

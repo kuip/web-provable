@@ -11,109 +11,115 @@
     <meta name="description" content="Verify Kayros-notarized content and run integrity-checked WasmX applications in your browser.">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Provable">
-    <meta property="og:description" content="Verify first. Compute second. Integrity-checked WasmX applications for the web.">
+    <meta property="og:description" content="Integrity-checked WasmX applications for the web.">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Provable">
-    <meta name="twitter:description" content="Verify first. Compute second. Integrity-checked WasmX applications for the web.">
+    <meta name="twitter:description" content="Integrity-checked WasmX applications for the web.">
     <title>Provable</title>
     <link rel="icon" href="./icons/logo.png">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <header id="shell-header" class="site-header">
-      <div class="header-inner">
-        <a class="brand" href="./" aria-label="Provable home">
-          <img src="./icons/logo.png" alt="" width="38" height="38">
-          <span>Provable</span>
-          <span class="platform-badge">Web</span>
-        </a>
-        <div class="header-actions">
-          <label class="visually-hidden" for="view-selector">Application</label>
-          <select id="view-selector" aria-label="Application">
-            <option value="core">Core</option>
-            <option value="prove-inclusion" selected>Prove Inclusion</option>
-            <option value="verify-kayros">Verify Kayros</option>
-          </select>
-          <a class="source-link" href="https://github.com/kuip/web-provable" target="_blank" rel="noopener noreferrer">Source</a>
-        </div>
-      </div>
+    <header id="shell-header" class="app-header">
+      <img src="./icons/logo.png" alt="" width="34" height="34">
+      <span class="brand">Provable</span>
+      <label class="visually-hidden" for="view-selector">Application</label>
+      <select id="view-selector" aria-label="Application">
+        <option value="core">Core</option>
+        <option value="prove-inclusion" selected>Prove Inclusion</option>
+        <option value="verify-kayros">Verify Kayros</option>
+      </select>
     </header>
 
     <main>
-      <section class="intro" aria-labelledby="page-title">
-        <p class="eyebrow">Local verification · Shared browser core</p>
-        <h1 id="page-title">Verify first. Compute second.</h1>
-        <p>Provable runs the same integrity-checked Core and application WasmX modules on GitHub Pages and in the Chrome extension.</p>
-      </section>
-
       <p id="url-import-status" class="notice" role="status" hidden></p>
 
-      <section id="core-view" class="view" hidden>
-        <div class="surface core-card">
-          <div class="section-intro">
-            <div>
-              <p class="eyebrow">Shared runtime</p>
-              <h2>Core</h2>
-            </div>
-            <p class="core-version">Core 0.1.0 · WasmX ABI 1</p>
-          </div>
-          <p>Common contracts, verified resources, SHA3-256, Kayros integration, Markdown forms, and the WasmX browser host.</p>
-
-          <div class="core-grid">
-            <section class="inset-card" aria-labelledby="kayros-settings-heading">
-              <h3 id="kayros-settings-heading">Kayros connection</h3>
-              <form id="kayros-settings-form">
-                <label for="kayros-api-key">API key</label>
-                <input
-                  id="kayros-api-key"
-                  type="password"
-                  placeholder="0x…"
-                  autocomplete="off"
-                  spellcheck="false"
-                  aria-describedby="kayros-api-key-status kayros-storage-note"
-                  disabled
-                >
-                <p id="kayros-api-key-status" class="field-status" aria-live="polite">Loading settings…</p>
-                <p id="kayros-storage-note" class="storage-note">Stored only in this browser's local storage. It is not encrypted or committed to GitHub.</p>
-                <div class="settings-actions">
-                  <button id="save-kayros-api-key" type="submit" disabled>Save API key</button>
-                  <button id="clear-kayros-api-key" class="secondary-button" type="button" disabled>Clear</button>
-                </div>
-              </form>
-            </section>
-
-            <section class="inset-card" aria-labelledby="latest-kayros-heading">
-              <div class="section-heading-row">
-                <h3 id="latest-kayros-heading">Latest Kayros hash</h3>
-                <a id="kayros-dashboard-link" href="https://dashboard.kayros.provable.dev/" target="_blank" rel="noopener noreferrer">Dashboard</a>
+      <section id="core-view" class="view core-view" hidden>
+        <div class="core-card">
+          <h1>Core</h1>
+          <p class="core-version">Core 0.1.0 · WasmX ABI 1</p>
+          <p>Shared contracts, integrity helpers, Kayros integration, and WasmX runtime libraries for every Provable app.</p>
+          <section class="core-settings" aria-labelledby="kayros-settings-heading">
+            <h2 id="kayros-settings-heading">Kayros connection</h2>
+            <form id="kayros-settings-form">
+              <label for="kayros-api-key">API key</label>
+              <input
+                id="kayros-api-key"
+                type="password"
+                placeholder="0x…"
+                autocomplete="off"
+                spellcheck="false"
+                aria-describedby="kayros-api-key-status kayros-storage-note"
+                disabled
+              >
+              <p id="kayros-api-key-status" class="field-status" aria-live="polite">Loading settings…</p>
+              <p id="kayros-storage-note" class="storage-note">Stored only in this browser's local storage. It is not encrypted or committed to GitHub.</p>
+              <div class="settings-actions">
+                <button id="save-kayros-api-key" type="submit" disabled>Save API key</button>
+                <button id="clear-kayros-api-key" class="secondary-button" type="button" disabled>Clear</button>
               </div>
-              <code id="latest-kayros-hash">Select Core to load…</code>
-              <p id="latest-kayros-metadata" class="field-status" aria-live="polite">s32_hashes · provable_sdk</p>
-              <button id="refresh-kayros" class="secondary-button" type="button">Refresh latest hash</button>
-              <p id="latest-kayros-error" class="error" role="alert" hidden></p>
-            </section>
-          </div>
+            </form>
+          </section>
+          <section class="drive-settings" aria-labelledby="google-drive-heading">
+            <h2 id="google-drive-heading">Google Drive</h2>
+            <p class="drive-account">
+              <span>Account</span>
+              <output id="google-drive-account" aria-live="polite">Loading…</output>
+            </p>
+            <p id="google-drive-status" class="field-status" aria-live="polite">Loading Google Drive settings…</p>
+            <p class="field-status">Requests your email and <code>drive.file</code> access. Provable can access only Drive files it creates or you explicitly select.</p>
+            <div class="settings-actions">
+              <button id="connect-google-drive" type="button" disabled>Connect Google Drive</button>
+              <button id="disconnect-google-drive" class="secondary-button" type="button" disabled>Disconnect</button>
+            </div>
+          </section>
+          <section class="latest-kayros" aria-labelledby="latest-kayros-heading">
+            <div class="section-heading-row">
+              <h2 id="latest-kayros-heading">Latest Kayros hash</h2>
+              <a id="kayros-dashboard-link" href="https://dashboard.kayros.provable.dev/" target="_blank" rel="noopener noreferrer">Dashboard</a>
+            </div>
+            <code id="latest-kayros-hash">Select Core to load…</code>
+            <p id="latest-kayros-metadata" class="field-status" aria-live="polite">s32_hashes · provable_sdk</p>
+            <button id="refresh-kayros" class="secondary-button" type="button">Refresh latest hash</button>
+            <p id="latest-kayros-error" class="error" role="alert" hidden></p>
+          </section>
+          <section class="local-records" aria-labelledby="local-records-heading">
+            <h2 id="local-records-heading">Local records</h2>
+            <p id="local-record-count" class="field-status" aria-live="polite">Loading local records…</p>
+            <p class="field-status">Execution records retain canonical inputs and outputs locally; diagnostics retain only an input digest.</p>
+            <ol id="local-record-list" class="record-list">
+              <li>No local records yet.</li>
+            </ol>
+          </section>
         </div>
       </section>
 
       <section id="prove-inclusion-view" class="view app-view">
-        <div id="app-content" class="surface markdown-app" aria-busy="true">
+        <div id="app-content" class="markdown-app" aria-busy="true">
           <p class="loading-message">Loading the verified UI template…</p>
         </div>
 
-        <p id="error-message" class="error surface-message" role="alert" hidden></p>
+        <p id="prove-record-status" class="record-notice" role="status" hidden></p>
+        <p id="error-message" class="error" role="alert" hidden></p>
 
         <section id="code-integrity" class="integrity-card" aria-labelledby="integrity-heading" hidden>
-          <div class="section-heading-row">
-            <div>
-              <p class="eyebrow">Packaged resources</p>
-              <h2 id="integrity-heading">Code integrity</h2>
-            </div>
+          <div>
+            <h2 id="integrity-heading">Code integrity</h2>
             <p id="module-status" class="status" aria-live="polite">Loading packaged resources…</p>
+            <p id="publisher-trust" class="field-status">Checking bundled publisher policy…</p>
+            <p id="resource-cache-status" class="field-status" aria-live="polite">Preparing verified local cache…</p>
           </div>
           <details>
-            <summary>Resource digests</summary>
+            <summary>Provenance and resource digests</summary>
             <dl class="digest-list">
+              <div>
+                <dt>Release manifest</dt>
+                <dd><code id="manifest-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>App + Core closure</dt>
+                <dd><code id="closure-digest">Pending</code></dd>
+              </div>
               <div>
                 <dt>WasmX module</dt>
                 <dd><code id="module-digest">Pending</code></dd>
@@ -132,23 +138,31 @@
       </section>
 
       <section id="verify-kayros-view" class="view app-view" hidden>
-        <div id="verify-kayros-content" class="surface markdown-app" aria-busy="true">
+        <div id="verify-kayros-content" class="markdown-app" aria-busy="true">
           <p class="loading-message">Loading the verified Verify Kayros UI template…</p>
         </div>
 
-        <p id="verify-kayros-error" class="error surface-message" role="alert" hidden></p>
+        <p id="verify-kayros-record-status" class="record-notice" role="status" hidden></p>
+        <p id="verify-kayros-error" class="error" role="alert" hidden></p>
 
         <section id="verify-kayros-integrity" class="integrity-card" aria-labelledby="verify-kayros-integrity-heading" hidden>
-          <div class="section-heading-row">
-            <div>
-              <p class="eyebrow">Packaged resources</p>
-              <h2 id="verify-kayros-integrity-heading">Code integrity</h2>
-            </div>
+          <div>
+            <h2 id="verify-kayros-integrity-heading">Code integrity</h2>
             <p id="verify-kayros-module-status" class="status" aria-live="polite">Loading packaged resources…</p>
+            <p id="verify-kayros-publisher-trust" class="field-status">Checking bundled publisher policy…</p>
+            <p id="verify-kayros-resource-cache-status" class="field-status" aria-live="polite">Preparing verified local cache…</p>
           </div>
           <details>
-            <summary>Resource digests</summary>
+            <summary>Provenance and resource digests</summary>
             <dl class="digest-list">
+              <div>
+                <dt>Release manifest</dt>
+                <dd><code id="verify-kayros-manifest-digest">Pending</code></dd>
+              </div>
+              <div>
+                <dt>App + Core closure</dt>
+                <dd><code id="verify-kayros-closure-digest">Pending</code></dd>
+              </div>
               <div>
                 <dt>WasmX module</dt>
                 <dd><code id="verify-kayros-module-digest">Pending</code></dd>
@@ -166,11 +180,6 @@
         </section>
       </section>
     </main>
-
-    <footer>
-      <span>Provable 0.1.0</span>
-      <span>Inputs stay in your browser unless sent to Kayros.</span>
-    </footer>
 
     <script type="module" src="./assets/app.js"></script>
   </body>

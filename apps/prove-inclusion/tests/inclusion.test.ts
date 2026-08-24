@@ -52,6 +52,10 @@ describe("Prove Inclusion reference implementation", () => {
 
   it("hashes, verifies notarization, then runs the inclusion module", async () => {
     const calls: string[] = [];
+    const run = vi.fn(async () => {
+      calls.push("run");
+      return { count: 2, result: true };
+    });
     const result = await runProveInclusionWorkflow(
       { a: "aaaa", b: "aa", n: 1 },
       {
@@ -63,14 +67,15 @@ describe("Prove Inclusion reference implementation", () => {
           calls.push("lookup");
           return notarization;
         },
-        run: async () => {
-          calls.push("run");
-          return { count: 2, result: true };
-        },
+        run,
       },
     );
 
     expect(calls).toEqual(["hash", "lookup", "run"]);
+    expect(run).toHaveBeenCalledWith(
+      { a: "aaaa", b: "aa", n: 1 },
+      notarization,
+    );
     expect(result).toMatchObject({
       status: "notarized",
       contentHash: "11".repeat(32),

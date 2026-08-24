@@ -18,7 +18,10 @@ export interface ProveInclusionOutput {
 
 export interface ProveInclusionWorkflowDependencies {
   findNotarization: (contentHash: string) => Promise<KayrosHashRecord | undefined>;
-  run: (input: ProveInclusionInput) => Promise<ProveInclusionOutput>;
+  run: (
+    input: ProveInclusionInput,
+    sourceRecord: KayrosHashRecord,
+  ) => Promise<ProveInclusionOutput>;
   sha3_256: (value: string) => string;
 }
 
@@ -37,6 +40,7 @@ export const PROVE_INCLUSION_APP: AppSourceManifest = {
   id: "prove-inclusion",
   kind: "app",
   version: "0.1.0",
+  publisher: "github:kuip",
   coreVersion: "^0.1.0",
   title: "Prove Inclusion",
   description: "Verify that A is notarized on Kayros, then count how many times B occurs in A.",
@@ -113,7 +117,7 @@ export async function runProveInclusionWorkflow(
     return { status: "not-found", contentHash };
   }
 
-  const output = await dependencies.run(input);
+  const output = await dependencies.run(input, record);
   const reference = computeProveInclusion(input);
   if (output.count !== reference.count || output.result !== reference.result) {
     throw new Error("WasmX output did not match the core reference implementation");

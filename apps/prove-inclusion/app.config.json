@@ -3,6 +3,7 @@
   "id": "prove-inclusion",
   "kind": "app",
   "version": "0.1.0",
+  "publisher": "github:kuip",
   "coreVersion": "^0.1.0",
   "title": "Prove Inclusion",
   "description": "Verify that A is notarized on Kayros, then count how many times B occurs in A.",

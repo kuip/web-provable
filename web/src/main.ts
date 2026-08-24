@@ -1,15 +1,25 @@
 import {
+  BrowserGoogleDriveConnection,
+  BrowserLocalRecords,
+  BundledPublisherTrustPolicy,
+  executeAndRecord,
   findKayrosRecordByHash,
   findKayrosRecordBySha3,
   findKayrosRecordsByDataItem,
   getLatestKayrosHash,
+  IndexedDbContentAddressedResourceCache,
   loadVerifiedBrowserApp,
+  kayrosHashToHex,
+  kayrosSourceVerification,
   normalizeKayrosApiKey,
   observeBrowserHeaderHeight,
   renderBrowserMarkdownForm,
   type AppExecutor,
+  type AppBuildIdentityV1,
   type AppReleaseManifest,
+  type DiagnosticStageV1,
   type KayrosConnectionOptions,
+  type RecordErrorV1,
   type WasmXSha3Module,
 } from "@provable/core";
 import {
@@ -38,12 +48,14 @@ interface RuntimeConfig {
 interface LoadedApp {
   config: RuntimeConfig;
   kayrosApiKey: string;
+  identity: AppBuildIdentityV1;
   manifest: AppReleaseManifest;
   runner: AppExecutor<ProveInclusionInput, ProveInclusionOutput>;
   sha3: WasmXSha3Module;
 }
 
 interface LoadedVerifyKayrosApp {
+  identity: AppBuildIdentityV1;
   manifest: AppReleaseManifest;
   runner: AppExecutor<VerifyKayrosModuleInput, VerifyKayrosOutput>;
   sha3: WasmXSha3Module;
@@ -90,7 +102,12 @@ const moduleStatus = requiredElement<HTMLElement>("module-status");
 const moduleDigest = requiredElement<HTMLElement>("module-digest");
 const uiDigest = requiredElement<HTMLElement>("ui-digest");
 const coreModuleDigest = requiredElement<HTMLElement>("core-module-digest");
+const manifestDigest = requiredElement<HTMLElement>("manifest-digest");
+const closureDigest = requiredElement<HTMLElement>("closure-digest");
+const publisherTrust = requiredElement<HTMLElement>("publisher-trust");
+const resourceCacheStatus = requiredElement<HTMLElement>("resource-cache-status");
 const errorMessage = requiredElement<HTMLElement>("error-message");
+const proveRecordStatus = requiredElement<HTMLElement>("prove-record-status");
 const urlImportStatus = requiredElement<HTMLElement>("url-import-status");
 const latestKayrosHash = requiredElement<HTMLElement>("latest-kayros-hash");
 const latestKayrosMetadata = requiredElement<HTMLElement>("latest-kayros-metadata");
@@ -105,14 +122,59 @@ const clearKayrosApiKeyButton = requiredElement<HTMLButtonElement>("clear-kayros
 const codeIntegrity = requiredElement<HTMLElement>("code-integrity");
 const verifyKayrosContent = requiredElement<HTMLElement>("verify-kayros-content");
 const verifyKayrosError = requiredElement<HTMLElement>("verify-kayros-error");
+const verifyKayrosRecordStatus = requiredElement<HTMLElement>(
+  "verify-kayros-record-status",
+);
 const verifyKayrosIntegrity = requiredElement<HTMLElement>("verify-kayros-integrity");
 const verifyKayrosModuleStatus = requiredElement<HTMLElement>("verify-kayros-module-status");
 const verifyKayrosModuleDigest = requiredElement<HTMLElement>("verify-kayros-module-digest");
 const verifyKayrosUiDigest = requiredElement<HTMLElement>("verify-kayros-ui-digest");
 const verifyKayrosCoreDigest = requiredElement<HTMLElement>("verify-kayros-core-digest");
+const verifyKayrosManifestDigest = requiredElement<HTMLElement>(
+  "verify-kayros-manifest-digest",
+);
+const verifyKayrosClosureDigest = requiredElement<HTMLElement>(
+  "verify-kayros-closure-digest",
+);
+const verifyKayrosPublisherTrust = requiredElement<HTMLElement>(
+  "verify-kayros-publisher-trust",
+);
+const verifyKayrosResourceCacheStatus = requiredElement<HTMLElement>(
+  "verify-kayros-resource-cache-status",
+);
+const localRecordCount = requiredElement<HTMLElement>("local-record-count");
+const localRecordList = requiredElement<HTMLOListElement>("local-record-list");
+const googleDriveAccount = requiredElement<HTMLElement>("google-drive-account");
+const googleDriveStatus = requiredElement<HTMLElement>("google-drive-status");
+const connectGoogleDriveButton = requiredElement<HTMLButtonElement>(
+  "connect-google-drive",
+);
+const disconnectGoogleDriveButton = requiredElement<HTMLButtonElement>(
+  "disconnect-google-drive",
+);
 
 const KAYROS_API_KEY_STORAGE_KEY = "provable.web.kayrosApiKey";
 const MAX_URL_FRAGMENT_LENGTH = 1_500_000;
+const localRecords = new BrowserLocalRecords({
+  countElement: localRecordCount,
+  listElement: localRecordList,
+  locationLabel: "on this site",
+});
+const googleDriveConnection = new BrowserGoogleDriveConnection({
+  accountElement: googleDriveAccount,
+  statusElement: googleDriveStatus,
+  connectButton: connectGoogleDriveButton,
+  disconnectButton: disconnectGoogleDriveButton,
+});
+googleDriveConnection.setUnavailable(
+  "Google Drive sign-in is available in the Chrome extension; this static site does not load Google's remote sign-in code.",
+);
+const resourceCache = new IndexedDbContentAddressedResourceCache();
+const trustPolicy = new BundledPublisherTrustPolicy(
+  "github-pages-bundle",
+  ["github:kuip"],
+);
+const bundleRootUrl = new URL("../", import.meta.url).href;
 let loadedApp: LoadedApp | undefined;
 let latestKayrosLoaded = false;
 
@@ -140,12 +202,18 @@ async function initialize(): Promise<void> {
   const [verified, verifyKayros, configResponse] = await Promise.all([
     loadVerifiedBrowserApp<ProveInclusionInput, ProveInclusionOutput>({
       appManifestUrl: "./apps/prove-inclusion/app.json",
+      bundleRootUrl,
       coreManifestUrl: "./apps/core/app.json",
+      resourceCache,
+      trustPolicy,
       workerUrl: "./assets/wasmx-worker.js",
     }),
     loadVerifiedBrowserApp<VerifyKayrosModuleInput, VerifyKayrosOutput>({
       appManifestUrl: "./apps/verify-kayros/app.json",
+      bundleRootUrl,
       coreManifestUrl: "./apps/core/app.json",
+      resourceCache,
+      trustPolicy,
       workerUrl: "./assets/wasmx-worker.js",
     }),
     fetch("./config.json"),
@@ -157,6 +225,7 @@ async function initialize(): Promise<void> {
   const loaded: LoadedApp = {
     config: configValue,
     kayrosApiKey: readStoredKayrosApiKey(),
+    identity: verified.identity,
     manifest: verified.manifest,
     runner: verified.runner,
     sha3: verified.sha3,
@@ -168,15 +237,24 @@ async function initialize(): Promise<void> {
   moduleDigest.textContent = verified.moduleDigest;
   uiDigest.textContent = verified.uiDigest;
   coreModuleDigest.textContent = verified.coreDigest;
+  manifestDigest.textContent = verified.manifestDigest;
+  closureDigest.textContent = verified.digestGraph.closureSha256;
+  publisherTrust.textContent = formatTrust(verified.trust);
+  resourceCacheStatus.textContent = formatCacheStatus(verified.cache);
   moduleStatus.textContent = "Packaged UI and modules verified";
   moduleStatus.dataset.status = "verified";
   verifyKayrosModuleDigest.textContent = verifyKayros.moduleDigest;
   verifyKayrosUiDigest.textContent = verifyKayros.uiDigest;
   verifyKayrosCoreDigest.textContent = verifyKayros.coreDigest;
+  verifyKayrosManifestDigest.textContent = verifyKayros.manifestDigest;
+  verifyKayrosClosureDigest.textContent = verifyKayros.digestGraph.closureSha256;
+  verifyKayrosPublisherTrust.textContent = formatTrust(verifyKayros.trust);
+  verifyKayrosResourceCacheStatus.textContent = formatCacheStatus(verifyKayros.cache);
   verifyKayrosModuleStatus.textContent = "Packaged UI and modules verified";
   verifyKayrosModuleStatus.dataset.status = "verified";
 
   const verifyKayrosApp: LoadedVerifyKayrosApp = {
+    identity: verifyKayros.identity,
     manifest: verifyKayros.manifest,
     runner: verifyKayros.runner,
     sha3: verifyKayros.sha3,
@@ -205,9 +283,22 @@ async function initialize(): Promise<void> {
 
   appContent.ariaBusy = "false";
   verifyKayrosContent.ariaBusy = "false";
+  void refreshLocalRecordSummary();
   if (viewSelector.value === "core") {
     void refreshLatestKayros();
   }
+}
+
+function formatTrust(trust: {
+  publisherClaim: string;
+  publisherClaimStatus: "bundle-allowlisted";
+  publisherSignatureStatus: "not-configured";
+}): string {
+  return `${trust.publisherClaim} claim · bundle authorized · publisher signature not configured`;
+}
+
+function formatCacheStatus(cache: { storedCount: number; presentCount: number }): string {
+  return `Verified cache before execution · ${cache.storedCount} stored · ${cache.presentCount} already present`;
 }
 
 function renderAppTemplate(markdown: string, manifest: AppReleaseManifest): ProveControls {
@@ -278,37 +369,108 @@ async function runVerifyKayrosPreview(
 ): Promise<void> {
   setVerifyKayrosBusy(controls, true);
   clearVerifyKayrosError();
+  clearRecordStatus(verifyKayrosRecordStatus);
+  let validAttempt = false;
+  let lookupCompleted = false;
+  let wasmxInvoked = false;
+  let diagnosticRecorded = false;
+  let lookup: VerifyKayrosLookup | undefined;
   try {
-    const workflow = await runVerifyKayrosWorkflow(readVerifyKayrosLookup(controls), {
-      findByRecordHash: (recordHash) => findKayrosRecordByHash(
-        recordHash,
-        kayrosConnection(runtime),
-        runtime.config.kayros.dataType,
-      ),
-      findByDataItem: (dataItem) => findKayrosRecordsByDataItem(
-        dataItem,
-        kayrosConnection(runtime),
-        runtime.config.kayros.dataType,
-      ),
-      run: async (moduleInput) => {
+    lookup = readVerifyKayrosLookup(controls);
+    assertSyntacticallyValidVerifyLookup(lookup);
+    validAttempt = true;
+    const workflow = await runVerifyKayrosWorkflow(lookup, {
+      findByRecordHash: async (recordHash) => {
+        const record = await findKayrosRecordByHash(
+          recordHash,
+          kayrosConnection(runtime),
+          runtime.config.kayros.dataType,
+        );
+        lookupCompleted = true;
+        return record;
+      },
+      findByDataItem: async (dataItem) => {
+        const records = await findKayrosRecordsByDataItem(
+          dataItem,
+          kayrosConnection(runtime),
+          runtime.config.kayros.dataType,
+        );
+        lookupCompleted = true;
+        return records;
+      },
+      run: async (moduleInput, sourceRecord) => {
         const inputBytes = new TextEncoder().encode(JSON.stringify(moduleInput));
         if (inputBytes.byteLength > app.manifest.resourceLimits.maxInputBytes) {
-          throw new Error("Kayros record exceeds the app input limit");
+          const error = new Error("Kayros record exceeds the app input limit");
+          diagnosticRecorded = true;
+          await recordDiagnostic(
+            app.identity,
+            moduleInput,
+            "input-limit",
+            { code: "input-too-large", message: error.message },
+            verifyKayrosRecordStatus,
+            ["kayros:read"],
+          );
+          throw error;
         }
-        return app.runner.run(moduleInput);
+        wasmxInvoked = true;
+        const execution = await executeAndRecord(app.runner, moduleInput, {
+          app: app.identity,
+          records: localRecords,
+          capabilitiesUsed: ["kayros:read"],
+          sourceVerification: kayrosSourceVerification(sourceRecord, {
+            apiBaseUrl: runtime.config.kayros.apiBaseUrl,
+            locallyVerified: false,
+            verificationMethod: "local-chain-hash",
+          }),
+          sourceVerificationFromOutput: (output) => kayrosSourceVerification(
+            sourceRecord,
+            {
+              apiBaseUrl: runtime.config.kayros.apiBaseUrl,
+              locallyVerified: output.matches,
+              verificationMethod: "local-chain-hash",
+            },
+          ),
+          onRecord: (record, persistenceError) => {
+            localRecords.showExecutionRecord(
+              record,
+              persistenceError,
+              verifyKayrosRecordStatus,
+            );
+          },
+        });
+        return execution.output;
       },
       sha3_256: (bytes) => app.sha3.sha3_256(bytes),
     });
 
     if (workflow.status === "not-found") {
       setOutput(controls.lookupStatus, "Not found");
-      throw new Error(`No ${workflow.lookupKind} record was found in Kayros`);
+      const error = new Error(`No ${workflow.lookupKind} record was found in Kayros`);
+      diagnosticRecorded = true;
+      await recordDiagnostic(
+        app.identity,
+        lookup,
+        "source-not-found",
+        { code: "kayros-source-not-found", message: error.message },
+        verifyKayrosRecordStatus,
+      );
+      throw error;
     }
     if (workflow.status === "ambiguous") {
       setOutput(controls.lookupStatus, `Ambiguous (${workflow.count} records)`);
-      throw new Error(
+      const error = new Error(
         `The data item matches ${workflow.count} Kayros records. Search by a record hash instead.`,
       );
+      diagnosticRecorded = true;
+      await recordDiagnostic(
+        app.identity,
+        lookup,
+        "source-verification",
+        { code: "kayros-source-ambiguous", message: error.message },
+        verifyKayrosRecordStatus,
+      );
+      throw error;
     }
 
     const { record, output } = workflow;
@@ -326,6 +488,18 @@ async function runVerifyKayrosPreview(
       throw new Error("Local verification failed: the calculated hash does not match Kayros");
     }
   } catch (error) {
+    if (validAttempt && !wasmxInvoked && !diagnosticRecorded && lookup) {
+      await recordDiagnostic(
+        app.identity,
+        lookup,
+        lookupCompleted ? "source-verification" : "source-lookup",
+        {
+          code: lookupCompleted ? "kayros-source-invalid" : "kayros-lookup-failed",
+          message: formatError(error),
+        },
+        verifyKayrosRecordStatus,
+      );
+    }
     showVerifyKayrosError(error);
   } finally {
     setVerifyKayrosBusy(controls, false);
@@ -345,37 +519,100 @@ function readVerifyKayrosLookup(controls: VerifyKayrosControls): VerifyKayrosLoo
   return lookup;
 }
 
+function assertSyntacticallyValidVerifyLookup(lookup: VerifyKayrosLookup): void {
+  const recordHash = lookup.recordHash?.trim() ?? "";
+  const dataItem = lookup.dataItem?.trim() ?? "";
+  if ((recordHash.length === 0) === (dataItem.length === 0)) {
+    throw new Error("Enter exactly one Kayros record hash or data item");
+  }
+  kayrosHashToHex(recordHash || dataItem);
+}
+
 async function runPreview(loaded: LoadedApp, controls: ProveControls): Promise<void> {
   setBusy(controls, true);
   clearError();
+  clearRecordStatus(proveRecordStatus);
+  let input: ProveInclusionInput | undefined;
+  let contentHashComputed = false;
+  let wasmxInvoked = false;
+  let diagnosticRecorded = false;
   try {
-    const input = readInput(controls);
+    input = readInput(controls);
     const inputBytes = new TextEncoder().encode(JSON.stringify(input));
     if (inputBytes.byteLength > loaded.manifest.resourceLimits.maxInputBytes) {
-      throw new Error("Input exceeds the app limit");
+      const error = new Error("Input exceeds the app limit");
+      diagnosticRecorded = true;
+      await recordDiagnostic(
+        loaded.identity,
+        input,
+        "input-limit",
+        { code: "input-too-large", message: error.message },
+        proveRecordStatus,
+      );
+      throw error;
     }
 
     const workflow = await runProveInclusionWorkflow(input, {
-      sha3_256: (value) => loaded.sha3.sha3_256(value),
+      sha3_256: (value) => {
+        const digest = loaded.sha3.sha3_256(value);
+        contentHashComputed = true;
+        return digest;
+      },
       findNotarization: (contentHash) => findKayrosRecordBySha3(
         contentHash,
         kayrosConnection(loaded),
         loaded.config.kayros.dataType,
       ),
-      run: (workflowInput) => loaded.runner.run(workflowInput),
+      run: async (workflowInput, sourceRecord) => {
+        wasmxInvoked = true;
+        const execution = await executeAndRecord(loaded.runner, workflowInput, {
+          app: loaded.identity,
+          records: localRecords,
+          capabilitiesUsed: ["kayros:read"],
+          sourceVerification: kayrosSourceVerification(sourceRecord, {
+            apiBaseUrl: loaded.config.kayros.apiBaseUrl,
+            locallyVerified: true,
+            verificationMethod: "database-match",
+          }),
+          onRecord: (record, persistenceError) => {
+            localRecords.showExecutionRecord(record, persistenceError, proveRecordStatus);
+          },
+        });
+        return execution.output;
+      },
     });
     setOutput(controls.contentHashOutput, workflow.contentHash);
 
     if (workflow.status === "lookup-error") {
       setOutput(controls.kayrosMatchOutput, "Unavailable");
       delete controls.kayrosMatchOutput.dataset.value;
-      throw new Error(`Kayros lookup failed: ${workflow.error}. The inclusion count was not run.`);
+      const error = new Error(
+        `Kayros lookup failed: ${workflow.error}. The inclusion count was not run.`,
+      );
+      diagnosticRecorded = true;
+      await recordDiagnostic(
+        loaded.identity,
+        input,
+        "source-lookup",
+        { code: "kayros-lookup-failed", message: error.message },
+        proveRecordStatus,
+      );
+      throw error;
     }
     if (workflow.status === "not-found") {
       setBooleanOutput(controls.kayrosMatchOutput, false);
-      throw new Error(
+      const error = new Error(
         `SHA3-256 of A was not found in Kayros ${loaded.config.kayros.table} for ${loaded.config.kayros.dataType}. The inclusion count was not run.`,
       );
+      diagnosticRecorded = true;
+      await recordDiagnostic(
+        loaded.identity,
+        input,
+        "source-not-found",
+        { code: "kayros-source-not-found", message: error.message },
+        proveRecordStatus,
+      );
+      throw error;
     }
 
     setBooleanOutput(controls.kayrosMatchOutput, true);
@@ -384,6 +621,18 @@ async function runPreview(loaded: LoadedApp, controls: ProveControls): Promise<v
     setOutput(controls.countOutput, String(workflow.output.count));
     setBooleanOutput(controls.resultOutput, workflow.output.result);
   } catch (error) {
+    if (input && !wasmxInvoked && !diagnosticRecorded) {
+      await recordDiagnostic(
+        loaded.identity,
+        input,
+        contentHashComputed ? "source-verification" : "integrity",
+        {
+          code: contentHashComputed ? "kayros-source-invalid" : "integrity-failed",
+          message: formatError(error),
+        },
+        proveRecordStatus,
+      );
+    }
     showError(error);
   } finally {
     setBusy(controls, false);
@@ -584,6 +833,7 @@ function resetResult(controls: ProveControls): void {
     delete output.dataset.value;
   }
   clearError();
+  clearRecordStatus(proveRecordStatus);
 }
 
 function resetVerifyKayrosResult(controls: VerifyKayrosControls): void {
@@ -592,6 +842,32 @@ function resetVerifyKayrosResult(controls: VerifyKayrosControls): void {
     delete output.dataset.value;
   }
   clearVerifyKayrosError();
+  clearRecordStatus(verifyKayrosRecordStatus);
+}
+
+async function recordDiagnostic(
+  app: AppBuildIdentityV1,
+  input: unknown,
+  stage: DiagnosticStageV1,
+  error: RecordErrorV1,
+  statusElement: HTMLElement,
+  capabilitiesUsed = stage.startsWith("source-") ? ["kayros:read"] : [],
+): Promise<void> {
+  await localRecords.recordDiagnostic({
+    app,
+    input,
+    stage,
+    error,
+    capabilitiesUsed,
+  }, statusElement);
+}
+
+async function refreshLocalRecordSummary(): Promise<void> {
+  await localRecords.refresh();
+}
+
+function clearRecordStatus(element: HTMLElement): void {
+  localRecords.clearStatus(element);
 }
 
 function showSelectedView(): void {
@@ -602,6 +878,7 @@ function showSelectedView(): void {
   verifyKayrosView.hidden = viewSelector.value !== "verify-kayros";
   if (showCore && loadedApp) {
     void refreshLatestKayros();
+    void refreshLocalRecordSummary();
   }
 }
 

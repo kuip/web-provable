@@ -15,6 +15,28 @@ const profile = process.argv.find((argument) => argument.startsWith("--profile="
 if (profile !== "development" && profile !== "store") {
   throw new Error(`Unsupported Chrome build profile: ${profile}`);
 }
+const googleDriveScopes = [
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/userinfo.email",
+];
+const localEnvironment = await readEnvironment(join(root, ".env"));
+const googleDriveClientId = normalizeGoogleOAuthClientId(
+  process.env.GOOGLE_DRIVE_CHROME_CLIENT_ID
+    ?? localEnvironment.GOOGLE_DRIVE_CHROME_CLIENT_ID
+    ?? "",
+);
+const sourceExtensionManifest = JSON.parse(
+  await readFile(join(chromeSource, "manifest.json"), "utf8"),
+);
+const extensionManifest = googleDriveClientId.length > 0
+  ? {
+      ...sourceExtensionManifest,
+      oauth2: {
+        client_id: googleDriveClientId,
+        scopes: googleDriveScopes,
+      },
+    }
+  : sourceExtensionManifest;
 const proveInclusionWasmSource = join(
   root,
   "target/wasm32-unknown-unknown/release/prove_inclusion_wasmx.wasm",
@@ -62,7 +84,10 @@ await Promise.all([
     target: "chrome114",
     sourcemap: false,
   }),
-  cp(join(chromeSource, "manifest.json"), join(output, "manifest.json")),
+  writeFile(
+    join(output, "manifest.json"),
+    `${JSON.stringify(extensionManifest, null, 2)}\n`,
+  ),
   cp(join(chromeSource, "panel.html"), join(output, "panel.html")),
   cp(join(chromeSource, "styles.css"), join(output, "styles.css")),
   cp(join(root, "static/image/logo.png"), join(output, "icons/logo.png")),
@@ -126,18 +151,22 @@ await writeFile(
   `${JSON.stringify(coreReleaseManifest, null, 2)}\n`,
 );
 
-const localEnvironment = profile === "development"
-  ? await readEnvironment(join(root, ".env"))
-  : {};
 const runtimeConfig = {
   schemaVersion: 1,
   profile,
   kayros: {
-    apiBaseUrl: localEnvironment.KAYROS_API_BASE_URL ?? "https://kayros.provable.dev",
-    dashboardUrl: localEnvironment.KAYROS_DASHBOARD_URL ?? "https://dashboard.kayros.provable.dev/",
-    apiKey: localEnvironment.KAYROS_API_KEY ?? "",
+    apiBaseUrl: profile === "development"
+      ? localEnvironment.KAYROS_API_BASE_URL ?? "https://kayros.provable.dev"
+      : "https://kayros.provable.dev",
+    dashboardUrl: profile === "development"
+      ? localEnvironment.KAYROS_DASHBOARD_URL ?? "https://dashboard.kayros.provable.dev/"
+      : "https://dashboard.kayros.provable.dev/",
+    apiKey: profile === "development" ? localEnvironment.KAYROS_API_KEY ?? "" : "",
     dataType: "provable_sdk",
     table: "s32_hashes",
+  },
+  googleDrive: {
+    clientId: googleDriveClientId,
   },
 };
 await writeFile(
@@ -152,6 +181,11 @@ console.log(`Core WasmX SHA-256: ${coreReleaseManifest.module.sha256}`);
 if (runtimeConfig.kayros.apiKey.length > 0) {
   console.log("Included the ignored local Kayros key in the development artifact only");
 }
+console.log(
+  googleDriveClientId.length > 0
+    ? "Configured Chrome Identity for Google Drive"
+    : "Google Drive sign-in is disabled until GOOGLE_DRIVE_CHROME_CLIENT_ID is set",
+);
 
 function digest(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -169,6 +203,20 @@ function releaseApp(sourceManifest, wasmBytes, uiBytes) {
       sha256: digest(uiBytes),
     },
   };
+}
+
+function normalizeGoogleOAuthClientId(value) {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return "";
+  }
+  if (
+    normalized.length > 255
+    || !/^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/.test(normalized)
+  ) {
+    throw new Error("GOOGLE_DRIVE_CHROME_CLIENT_ID must be a Google OAuth client ID");
+  }
+  return normalized;
 }
 
 async function readEnvironment(path) {
